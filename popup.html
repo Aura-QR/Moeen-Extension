@@ -1,0 +1,280 @@
+<!-- popup.html - The HTML structure and styling for the popup interface of the Moeen-2 browser extension, allowing users to configure settings such as the default CSS selector for the save button and site-specific profiles in JSON format, as well as providing a button to start the lesson preparation process and displaying status messages. -->
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>مُعين - لوحة التحكم</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+        }
+
+        body {
+            width: 400px;
+            background: #f3f6fb;
+            color: #1f2937;
+            padding: 14px;
+        }
+
+        .container {
+            background: #fff;
+            border-radius: 16px;
+            border: 1px solid #e4eaf4;
+            box-shadow: 0 10px 28px rgba(20, 30, 60, 0.09);
+            padding: 18px;
+        }
+
+        /* ── Header ── */
+        .header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 14px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid #eef2f8;
+        }
+
+        .header h1 { color: #0056b3; font-size: 20px; }
+        .header p  { color: #6b7280; font-size: 12px; margin-top: 2px; }
+
+        /* ── Section card ── */
+        .section {
+            border: 1px solid #eef2f8;
+            border-radius: 12px;
+            padding: 12px;
+            margin-bottom: 12px;
+            background: #fcfdff;
+        }
+
+        .section-title {
+            font-size: 12px;
+            font-weight: 700;
+            color: #0056b3;
+            text-transform: uppercase;
+            letter-spacing: .04em;
+            margin-bottom: 10px;
+        }
+
+        /* ── Form elements ── */
+        .form-group { margin-bottom: 10px; }
+        .form-group:last-child { margin-bottom: 0; }
+
+        label {
+            display: block;
+            font-size: 13px;
+            font-weight: 600;
+            color: #334155;
+            margin-bottom: 5px;
+        }
+
+        input[type="text"],
+        input[type="url"],
+        textarea {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid #d1dae8;
+            border-radius: 9px;
+            font-size: 13px;
+            color: #1f2937;
+            background: #fff;
+            transition: border-color .2s, box-shadow .2s;
+        }
+
+        textarea {
+            font-family: "Courier New", Courier, monospace;
+            font-size: 12px;
+            resize: vertical;
+            min-height: 110px;
+        }
+
+        input::placeholder,
+        textarea::placeholder { color: #9aa6b8; }
+
+        input:focus,
+        textarea:focus {
+            outline: none;
+            border-color: #7ab3e8;
+            box-shadow: 0 0 0 3px rgba(0, 86, 179, .11);
+        }
+
+        textarea.json-error {
+            border-color: #e53e3e;
+            box-shadow: 0 0 0 3px rgba(229, 62, 62, .1);
+        }
+
+        .hint {
+            font-size: 11px;
+            color: #8a96a8;
+            margin-top: 4px;
+            line-height: 1.45;
+        }
+
+        .json-err-msg {
+            display: none;
+            font-size: 11px;
+            color: #c0392b;
+            background: #fdecea;
+            border-radius: 6px;
+            padding: 5px 9px;
+            margin-top: 4px;
+        }
+
+        /* ── Checkbox ── */
+        .checkbox-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 8px;
+            font-size: 13px;
+            color: #3a4658;
+        }
+
+        .checkbox-group input[type="checkbox"] {
+            accent-color: #0056b3;
+            width: 15px;
+            height: 15px;
+            flex-shrink: 0;
+        }
+
+        .checkbox-group label { margin: 0; font-weight: normal; }
+
+        /* ── Buttons ── */
+        .buttons {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        button {
+            border: none;
+            border-radius: 10px;
+            height: 42px;
+            font-size: 14px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: opacity .15s, transform .1s;
+        }
+
+        button:active { transform: translateY(1px); }
+
+        .btn-primary {
+            background: linear-gradient(145deg, #0056b3, #1676df);
+            color: #fff;
+            box-shadow: 0 6px 14px rgba(0, 86, 179, .22);
+        }
+
+        .btn-primary:hover  { opacity: .9; }
+
+        /* ── Status ── */
+        .status {
+            display: none;
+            padding: 9px 12px;
+            border-radius: 9px;
+            font-size: 13px;
+            line-height: 1.4;
+            margin-bottom: 10px;
+        }
+
+        .status.success { display:block; background:#edf9f2; color:#16784b; border:1px solid #c3e8d4; }
+        .status.error   { display:block; background:#fef3f2; color:#b42318; border:1px solid #f5c6c2; }
+        .status.info    { display:block; background:#eef8fb; color:#0c5460; border:1px solid #c0dfe8; }
+
+        /* ── Footer ── */
+        .footer {
+            border-top: 1px dashed #dbe5f0;
+            padding-top: 9px;
+            text-align: center;
+            color: #8a96a8;
+            font-size: 11px;
+            line-height: 1.6;
+        }
+
+        /* ── Loading spinner ── */
+        .loading { opacity: .7; pointer-events: none; }
+        .loading::after {
+            content: "";
+            display: inline-block;
+            width: 13px; height: 13px;
+            border: 2px solid currentColor;
+            border-top-color: transparent;
+            border-radius: 50%;
+            animation: spin .85s linear infinite;
+            margin-right: 6px;
+            vertical-align: -2px;
+        }
+
+        @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+<div class="container">
+
+    <!-- Header -->
+    <div class="header">
+        <div>
+            <h1>مُعين-2</h1>
+            <p>إعدادات محلية للامتداد فقط</p>
+        </div>
+    </div>
+
+    <!-- Status message -->
+    <div id="status" class="status" role="status" aria-live="polite"></div>
+
+    <!-- ── Local settings ── -->
+    <div class="section">
+        <div class="section-title">⚙️ إعدادات الامتداد</div>
+
+        <div class="form-group">
+            <label for="defaultSelector">مُحدد CSS الافتراضي</label>
+            <input type="text" id="defaultSelector"
+                   placeholder="مثال: a[href='#finish'] أو button.submit-btn"
+                   dir="ltr" spellcheck="false" autocomplete="off">
+            <p class="hint">يُستخدم عند عدم وجود ملف شخصي للموقع الحالي.</p>
+        </div>
+
+        <div class="form-group">
+            <label for="siteProfiles">ملفات مواقع محددة (JSON)</label>
+            <textarea id="siteProfiles" dir="ltr" spellcheck="false"
+                      placeholder='{
+  "schools.madrasati.sa": {
+    "selector": "a[href=\"#finish\"]",
+    "interval": 1200,
+    "maxRetries": 15
+  },
+  "external.madrasati.sa": {
+    "selector": "a[href=\"#finish\"]",
+    "interval": 1200,
+    "maxRetries": 15
+  }
+}'></textarea>
+            <p class="hint">صيغة JSON: { "hostname": { "selector": "...", "interval": 1200, "maxRetries": 15 } }</p>
+            <div id="jsonErrMsg" class="json-err-msg"></div>
+        </div>
+    </div>
+
+    <!-- ── Main Action Button ── -->
+    <button id="startWeekBtn" class="btn-primary" type="button" style="width: 100%; height: 50px; font-size: 16px; margin-bottom: 12px;">
+        🚀 ابدأ تحضير الأسبوع
+    </button>
+
+    <!-- ── Action buttons ── -->
+    <div class="buttons">
+        <button id="saveBtn" class="btn-primary" type="button">💾 حفظ الإعدادات</button>
+    </div>
+
+    <!-- Footer -->
+    <div class="footer">
+        <p>الإصدار 10.0.1 | support@Moeen-2.com</p>
+        <p>يعمل على منصة مدرستي فقط</p>
+    </div>
+
+</div>
+<script src="shared/constants.js"></script>
+<script src="popup.js"></script>
+</body>
+</html>

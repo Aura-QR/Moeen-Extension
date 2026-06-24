@@ -1,0 +1,1446 @@
+<!DOCTYPE html>
+<html dir=rtl lang=ar>
+
+<head>
+    <meta http-equiv="content-type" content="text/html; charset=utf-8">
+    <meta http-equiv="x-ua-compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <!-- FAVICON -->
+    <link rel="apple-touch-icon" sizes="180x180" href="https://vstedu.azureedge.net/v27/assets/landing/images/apple-touch-icon.png?v=14">
+    <link rel="icon" type="image/png" sizes="32x32" href="https://vstedu.azureedge.net/v27/assets/landing/images/favicon-32x32.png?v=14">
+    <link rel="icon" type="image/png" sizes="16x16" href="https://vstedu.azureedge.net/v27/assets/landing/images/favicon-16x16.png?v=14">
+    <link rel="manifest" href="https://vstedu.azureedge.net/v27/assets/landing/images/site.webmanifest?v=14">
+    <link rel="stylesheet" href="https://vstedu.azureedge.net/v27/css/components/select-boxes.css?v=14">
+    <link rel="stylesheet" href="https://vstedu.azureedge.net/v27/css/components/radio-checkbox.css?v=14">
+    <link rel="stylesheet" href="https://vstedu.azureedge.net/v27/css/components/bs-select.css?v=14">
+    <!-- Core Style -->
+        <link rel="stylesheet" href="https://vstedu.azureedge.net/v27/assets/landing/style-rtl.css?v=14">
+    <link rel="stylesheet" href="https://vstedu.azureedge.net/v27/content/homepagenew/lib/swiper/swiper-bundle.min.css?v=14">
+    <link rel="stylesheet" href="https://vstedu.azureedge.net/v27/assets/landing/main_style.css?v=14">
+    <!-- Font Icons -->
+    <link rel="stylesheet" href="https://vstedu.azureedge.net/v27/assets/landing/css/font-icons.css?v=14">
+    <link rel="stylesheet" href="https://vstedu.azureedge.net/v27/assets/landing/fonts/fontawesome/css/all.min.css?v=14">
+
+
+    
+    <!-- Document Title
+    ============================================= -->
+        <title>منصة مدرستي</title>
+        <meta content="مدرستي، منصة مدرستي، التعليم الإلكتروني، التعلم عن بُعد، المحتوى التعليمي، الواجبات الإلكترونية، الاختبارات الإلكترونية، الصفوف الافتراضية، التواصل، الدعم التعليمي، الوسائط المتعددة، الكتب الإلكترونية، المقاطع المرئية، الملفات الصوتية، الرسائل النصية، المحادثات الصوتية، الفيديو، التعلم التعاوني، جودة التعليم." name="keywords">
+        <meta name="description" content="مدرستي نظام إدارة تعلم إلكتروني لمدارس المملكة العربية السعودية">
+        <meta name="robots" content="index, follow">
+    <!-- Global site tag (gtag.js) - Google Analytics -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-8P4LGY63QW"></script>
+    <script>
+        var isExternal = 0;  // for check whether the site external or internal
+        var appUrl = 'https://schools.madrasati.sa/';    // for app url
+
+        window.dataLayer = window.dataLayer || [];
+        function gtag() { dataLayer.push(arguments); }
+        gtag('js', new Date());
+        gtag('config', 'G-8P4LGY63QW');
+    </script>
+</head>
+
+<body class="stretched rtl is-expanded-menu has-plugin-bootstrap has-plugin-animations" data-smooth-scroll="true">
+    <div class="loading-bar d-none" id="loaderUI">
+        <div class="loading-progress"></div>
+    </div>
+    <!-- Document Wrapper
+    ============================================= -->
+    <div id="wrapper">
+        <!-- Beta
+                        ============================================= -->
+        <!-- #beta end -->
+        <!-- Header
+        ============================================= -->
+        <header id="header" class="transparent-header no-sticky">
+            <div id="header-wrap">
+                <div class="container">
+                    <div class="header-row justify-content-between">
+
+                        <!-- Logo
+                        ============================================= -->
+                        <div id="logo">
+                            <a href="https://schools.madrasati.sa/?Language=1">
+                                <img class="logo-default" srcset="https://vstedu.azureedge.net/v27/assets/landing/images/logo.svg?v=14, https://vstedu.azureedge.net/v27/assets/landing/images/logo.svg 2x?v=14"
+                                     src="https://vstedu.azureedge.net/v27/assets/landing/images/logo.svg?v=14" alt="Madrasati Logo" height="64" width="156">
+                                <img class="logo-dark" srcset="https://vstedu.azureedge.net/v27/assets/landing/images/logo.svg?v=14, https://vstedu.azureedge.net/v27/assets/landing/images/logo.svg 2x?v=14"
+                                     src="https://vstedu.azureedge.net/v27/assets/landing/images/logo.svg?v=14" alt="Madrasati Logo" height="64" width="156">
+                            </a>
+                        </div><!-- #logo end -->
+
+                        <div class="primary-menu-trigger">
+                            <button class="cnvs-hamburger" type="button" title="Open Mobile Menu">
+                                <span class="cnvs-hamburger-box"><span class="cnvs-hamburger-inner"></span></span>
+                            </button>
+                        </div>
+
+                        <!-- Primary Navigation
+                        ============================================= -->
+                        <nav class="primary-menu">
+
+                            <ul class="menu-container">
+                                <li class="menu-item">
+                                    <a class="menu-link" href="https://schools.madrasati.sa/?Language=1">
+                                        <div>
+                                            الرئيسية
+                                        </div>
+                                    </a>
+                                </li>
+                                <li class="menu-item">
+                                    <a class="menu-link" href="/Auth/About?Language=1">
+                                        <div>
+                                            عن مدرستي
+                                        </div>
+                                    </a>
+                                </li>
+                                <li class="menu-item">
+                                    <a class="menu-link" href="#">
+                                        <div>
+                                            الفعاليات
+                                        </div>
+                                    </a>
+                                    <ul class="sub-menu-container">
+                                        <li class="menu-item">
+                                            <a class="menu-link d-flex justify-content-between align-items-center" href="#">
+                                                <div>المسابقات</div>
+                                                <span class="badge text-bg-secondary d-inline-block">قريبا</span>
+                                            </a>
+                                        </li>
+                                        <li class="menu-item">
+                                            <a class="menu-link d-flex justify-content-between align-items-center" href="#">
+                                                <div>الويبنارات</div>
+                                                <span class="badge text-bg-secondary d-inline-block">قريبا</span>
+                                            </a>
+                                        </li>
+                                        <li class="menu-item">
+                                            <a class="menu-link d-flex justify-content-between align-items-center" href="#">
+                                                <div>ورش العمل</div>
+                                                <span class="badge text-bg-secondary d-inline-block">قريبا</span>
+                                            </a>
+                                        </li>
+                                    </ul>
+                                </li>
+                                <li class="menu-item">
+                                    <a class="menu-link" href="#section-how">
+                                        <div>
+                                            مركز المعرفة
+                                        </div>
+                                    </a>
+                                    <ul class="sub-menu-container">
+                                        <li class="menu-item">
+                                            <a class="menu-link" href="/SubjectBooks?Language=1">
+                                                <div>الكتب المدرسية</div>
+                                            </a>
+                                        </li>
+                                        <li class="menu-item">
+                                            <a class="menu-link" href="/Auth/IeanChanel?Language=1">
+                                                <div>قنوات عين التعليمية</div>
+                                            </a>
+                                        </li>
+                                        <li class="menu-item">
+                                            <a class="menu-link external-confirm" href="https://www.ien.edu.sa/Home/Dashbord">
+                                                <div>عين الاثرائية</div>
+                                            </a>
+                                        </li>
+                                        <li class="menu-item">
+                                            <a class="menu-link external-confirm" href="https://sdl.edu.sa/SDLPortal/ar/Publishers.aspx">
+                                                <div>المكتبة الرقمية</div>
+                                            </a>
+                                        </li>
+                                        <li class="menu-item">
+                                            <a class="menu-link" href="/Guides/Instructions?Language=1">
+                                                <div>الأدلة والإرشادات</div>
+                                            </a>
+                                        </li>
+                                    </ul>
+                                </li>
+                                <li class="menu-item">
+                                    <a class="menu-link" href="/Auth/Contact_Support?Language=1">
+                                        <div>
+                                            تواصل معنا
+                                        </div>
+                                    </a>
+                                </li>
+                                <li class="menu-item mega-menu mega-menu-small d-lg-none">
+                                    <a href="#" class="menu-link">
+                                        <div>تسجيل دخول</div>
+                                    </a>
+                                    <div class="mega-menu-content mega-menu-style-1">
+                                        <ul class="sub-menu-container mega-menu-column px-0 py-2">
+                                            <li class="menu-item">
+                                                <a class="menu-link" href="/Auth/SignIn">
+                                                    <div class="d-flex align-items-center">
+                                                        <div class="ico-sign-in me-3">
+                                                            <i class="fa-brands fa-windows"></i>
+                                                        </div>
+                                                        <div>
+                                                            <h3 class="mb-0 h5 text-transform-none ls-0">
+                                                                أطفال روضتي
+
+                                                            </h3>
+                                                            <p class="text-black-50 text-transform-none ls-0 mb-0">
+                                                                الدخول بحساب مايكروسوفت
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                </a>
+                                            </li>
+                                            <li class="menu-item">
+                                                <a class="menu-link" href="/Auth/SignIn">
+                                                    <div class="d-flex align-items-center">
+                                                        <div class="ico-sign-in me-3">
+                                                            <i class="fa-brands fa-windows"></i>
+                                                        </div>
+                                                        <div>
+                                                            <h3 class="mb-0 h5 text-transform-none ls-0">
+                                                                الكادر التعليمي والطلاب
+                                                            </h3>
+                                                            <p class="text-black-50 text-transform-none ls-0 mb-0">
+                                                                الدخول بحساب مايكروسوفت
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                </a>
+                                            </li>
+                                            
+                                            <li class="menu-item">
+                                                <a class="menu-link" href="/Auth/SsoSignIn">
+                                                    <div class="d-flex align-items-center">
+                                                        <div class="ico-sign-in ico-noor me-3">
+                                                            <img src="https://vstedu.azureedge.net/v27/assets/landing/images/moelogo.svg?v=14" alt="Moe Logo" />
+                                                        </div>
+                                                        <div>
+                                                            <h3 class="mb-0 h5 text-transform-none ls-0">
+                                                                الدخول الموحد للوزارة
+                                                            </h3>
+                                                            <p class="text-black-50 text-transform-none ls-0 mb-0">
+                                                                الدخول الموحد للوزارة
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                </a>
+                                            </li>
+                                         
+                                            <li class="menu-item">
+                                                <a class="menu-link" href="http://noor.moe.gov.sa">
+                                                    <div class="d-flex align-items-center">
+                                                        <div class="ico-sign-in ico-noor me-3">
+
+                                                            <img src="https://vstedu.azureedge.net/v27/assets/landing/images/noorlogo.png?v=14"
+                                                                 alt="Noor Logo" />
+                                                        </div>
+                                                        <div>
+                                                            <h3 class="mb-0 h5 text-transform-none ls-0">
+                                                                ولي الأمر والإداريين
+
+                                                            </h3>
+                                                            <p class="text-black-50 text-transform-none ls-0 mb-0">
+                                                                الدخول بحساب نور
+
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                </a>
+                                            </li>
+                                        </ul>
+                                    </div>
+                                </li>
+                                <li class="menu-item d-lg-none">
+                                    <a class="menu-link" href="/ChangePassword?Language=1">
+                                        <div>
+                                            التسجيل / استعادة كلمة المرور
+                                        </div>
+                                    </a>
+                                </li>
+                                <li class="menu-item d-lg-none">
+                                    <a class="menu-link" href="/Auth/Contact_Support?Language=1">
+                                        <div>
+                                            الدعم الفني
+                                        </div>
+                                    </a>
+                                </li>
+
+                            </ul>
+
+                        </nav><!-- #primary-menu end -->
+                       
+                        <div class="ms-auto me-0 me-lg-2 me-lg-0 hstack">
+                            <div class="dropdown u-dropdown m-0 me-1  d-none d-lg-flex">
+                                <a href="#" class="button button-small button-color-1 rounded-pill"
+                                   data-bs-toggle="dropdown" data-bs-container="body" data-bs-auto-close="outside">
+                                    تسجيل الدخول
+                                </a>
+                                <ul class="dropdown-menu">
+                                    <li>
+                                        <a class="dropdown-item" href="/Auth/SignIn">
+                                            <div class="d-flex align-items-center">
+                                                <div class="ico-sign-in me-3">
+                                                    <i class="fa-brands fa-windows"></i>
+                                                </div>
+                                                <div>
+                                                    <h3 class="mb-0 h5 text-transform-none ls-0">
+                                                        أطفال روضتي
+                                                    </h3>
+                                                    <p class="text-black-50 text-transform-none ls-0 mb-0">
+                                                        الدخول بحساب مايكروسوفت
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        </a>
+                                    </li>
+                                    <li>
+                                        <hr class="dropdown-divider">
+                                    </li>
+                                    <li>
+                                        <a class="dropdown-item" href="/Auth/SignIn">
+                                            <div class="d-flex align-items-center">
+                                                <div class="ico-sign-in me-3">
+                                                    <i class="fa-brands fa-windows"></i>
+                                                </div>
+                                                <div>
+                                                    <h3 class="mb-0 h5 text-transform-none ls-0">
+                                                        الكادر التعليمي والطلاب
+                                                    </h3>
+                                                    <p class="text-black-50 text-transform-none ls-0 mb-0">
+                                                        الدخول بحساب مايكروسوفت
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        </a>
+                                    </li>
+                                    <li>
+                                        <hr class="dropdown-divider">
+                                    </li>
+                                  
+                                        <li>
+                                            <a class="dropdown-item" href="/Auth/SSOSignIn">
+                                                <div class="d-flex align-items-center">
+                                                    <div class="ico-sign-in ico-noor me-3">
+                                                        <img src="https://vstedu.azureedge.net/v27/assets/landing/images/moelogo.svg?v=14" alt="Moe Logo" />
+                                                    </div>
+                                                    <div>
+                                                        <h3 class="mb-0 h5 text-transform-none ls-0">
+                                                            الدخول الموحد للوزارة
+                                                        </h3>
+                                                        <p class="text-black-50 text-transform-none ls-0 mb-0">
+                                                            الدخول الموحد للوزارة
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                            </a>
+                                        </li>
+                                    <li>
+                                        <hr class="dropdown-divider">
+                                    </li>
+                                    <li>
+                                        <a class="dropdown-item" href="http://noor.moe.gov.sa">
+                                            <div class="d-flex align-items-center">
+                                                <div class="ico-sign-in ico-noor me-3">
+                                                    <img src="https://vstedu.azureedge.net/v27/assets/landing/images/noorlogo.png?v=14"
+                                                         alt="Noor Logo" />
+                                                </div>
+                                                <div>
+                                                    <h3 class="mb-0 h5 text-transform-none ls-0">
+                                                        ولي الأمر والإداريين
+                                                    </h3>
+                                                    <p class="text-black-50 text-transform-none ls-0 mb-0">
+                                                        الدخول بحساب نور
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        </a>
+                                    </li>
+                                    <li>
+                                        <hr class="dropdown-divider">
+                                    </li>
+                                    <li>
+                                        <a class="dropdown-item" href="/ChangePassword?Language=1">
+                                            <div class="d-flex align-items-center">
+                                                <div class="ico-sign-in me-3">
+                                                    <i class="fa-solid fa-key"></i>
+                                                </div>
+                                                <div>
+                                                    <h3 class="mb-0 h5 text-transform-none ls-0">
+                                                        استعادة كلمة المرور
+
+                                                    </h3>
+                                                    <p class="text-black-50 text-transform-none ls-0 mb-0">
+                                                        عند نسيانها
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        </a>
+                                    </li>
+                                </ul>
+                            </div>
+                            <a href="/ChangePassword?Language=1"
+                               class="button button-small button-border button-color-1 button-circle  d-none d-lg-flex">
+                                التسجيل/استعادة كلمة المرور
+
+                            </a>
+                            <span data-bs-toggle="modal" data-bs-target="#homepagesearch">
+                                <a href="#"
+                                   class="button button-small button-border button-color-1 button-circle button-header-icon"
+                                   data-bs-toggle="tooltip" data-bs-title=البحث data-bs-placement="bottom">
+                                    <img src="https://vstedu.azureedge.net/v27/images/svg/search.svg?v=14" alt=البحث />
+                                </a>
+                            </span>
+                            <a href="https://customerexp.moe.gov.sa/s/Nov0aaxR1GuV8Mo7LQsa"
+                               class="button button-small button-border border-0 button-color-1 button-circle button-header-icon external-confirm"
+                               data-bs-toggle="tooltip" data-bs-title=شاركنا تجربتك data-bs-placement="bottom">
+                                <img src="https://vstedu.azureedge.net/v27/images/svg/message-edit.svg?v=14" alt=شاركنا تجربتك />
+                            </a>
+                            <a href="/Auth/Contact_Support?Language=1"
+                               class="button button-small button-border border-0 button-color-1 button-circle button-header-icon d-none d-lg-flex"
+                               data-bs-toggle="tooltip" data-bs-title=الدعم الفني data-bs-placement="bottom">
+                                <img style="width: 24px; height: 24px; margin-top: 5px;" src="https://vstedu.azureedge.net/v27/images/svg/message-question-solid.svg?v=14" alt=الدعم الفني />
+                            </a>
+                            <a href="/Auth/ChangeLanguage?Language=1"
+                               class="button button-small button-border border-0 button-color-1 button-circle button-header-icon"
+                               data-bs-toggle="tooltip" data-bs-title=English data-bs-placement="bottom">
+                                <img src="https://vstedu.azureedge.net/v27/images/svg/globe-earth.svg?v=14" alt=English />
+                            </a>
+                        </div>
+                        <!-- Disktop menu -->
+
+                    </div>
+                </div>
+            </div>
+            <div class="header-wrap-clone"></div>
+        </header><!-- #header end -->
+        
+
+<section id="slider" class="slider-element include-header">
+    <div class="slider-inner">
+
+        <div class="slider-caption p-0">
+            <div class="container d-flex align-items-stretch">
+                <div class="row w-100">
+                    <div class="col-lg-5 text-center d-flex flex-column justify-content-center">
+                        <br />
+                        
+                        <h1 data-animate="fadeInUp">
+                            مدرستي
+                        </h1>
+                        <h2 data-animate="fadeInUp" data-delay="500">
+                            أسلوب جديد لتعليم إلكتروني متميز
+                        </h2>
+                        <p data-animate="fadeInUp" data-delay="1000">
+
+                                    منصة تابعة لوزارة التعليم في المملكة العربية السعودية، تقدم محتوى تعليمياً شاملا
+                                    ومتنوعا للطلاب من جميع
+                                    المراحل، وتوفر أدوات تفاعلية وممتعة للتعلم والتدريب.
+                                                        </p>
+                        <div class="d-flex gap-1 align-items-center flex-column flex-lg-row justify-content-center mt-4">
+                            <div class="dropup-center u-dropdown dropend">
+                                <a href="#" class="button button-xlarge button-circle button-color-2 dropdown-signin"
+                                   data-bs-toggle="dropdown" data-bs-container="body"
+                                   data-bs-auto-close="outside" data-animate="fadeIn" data-delay="1250">
+                                    تسجيل دخول
+                                </a>
+                                <ul class="dropdown-menu u-dropdown-menu">
+                                    <li>
+                                        <a class="dropdown-item" href="/Auth/SignIn">
+                                            <div class="d-flex align-items-center">
+                                                <div class="ico-sign-in me-3">
+                                                    <i class="fa-brands fa-windows"></i>
+                                                </div>
+                                                <div>
+                                                    <h3 class="mb-0 h5 text-transform-none ls-0">
+                                                        أطفال روضتي
+                                                    </h3>
+                                                    <p class="text-black-50 text-transform-none ls-0 mb-0">
+                                                        الدخول بحساب مايكروسوفت
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        </a>
+                                    </li>
+                                    <li>
+                                        <hr class="dropdown-divider">
+                                    </li>
+                                    <li>
+                                        <a class="dropdown-item" href="/Auth/SignIn">
+                                            <div class="d-flex align-items-center">
+                                                <div class="ico-sign-in me-3">
+                                                    <i class="fa-brands fa-windows"></i>
+                                                </div>
+                                                <div>
+                                                    <h3 class="mb-0 h5 text-transform-none ls-0">
+                                                        الكادر التعليمي والطلاب
+                                                    </h3>
+                                                    <p class="text-black-50 text-transform-none ls-0 mb-0">
+                                                        الدخول بحساب مايكروسوفت
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        </a>
+                                    </li>
+                                    <li>
+                                        <hr class="dropdown-divider">
+                                    </li>
+                                    
+                                        <li>
+                                            <a class="dropdown-item" href="/Auth/SsoSignIn">
+                                                <div class="d-flex align-items-center">
+                                                    <div class="ico-sign-in ico-noor me-3">
+                                                        <img src="https://vstedu.azureedge.net/v27/assets/landing/images/moelogo.svg?v=14" alt="Moe Logo" />
+                                                    </div>
+                                                    <div>
+                                                        <h3 class="mb-0 h5 text-transform-none ls-0">
+                                                            الدخول الموحد للوزارة
+                                                        </h3>
+                                                        <p class="text-black-50 text-transform-none ls-0 mb-0">
+                                                            الدخول الموحد للوزارة
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                            </a>
+                                        </li>
+                                        <li>
+                                            <hr class="dropdown-divider">
+                                        </li>
+                               
+                                    <li>
+                                        <a href="http://noor.moe.gov.sa" class="dropdown-item">
+                                            <div class="d-flex align-items-center">
+                                                <div class="ico-sign-in ico-noor me-3">
+                                                    <img src="https://vstedu.azureedge.net/v27/assets/landing/images/noorlogo.png?v=14"
+                                                         alt="Noor Logo" />
+                                                </div>
+                                                <div>
+                                                    <h3 class="mb-0 h5 text-transform-none ls-0">
+                                                        ولي الأمر والإداريين
+                                                    </h3>
+                                                    <p class="text-black-50 text-transform-none ls-0 mb-0">
+                                                        الدخول بحساب نور
+
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        </a>
+                                    </li>
+                                    <li>
+                                        <hr class="dropdown-divider">
+                                    </li>
+                                    <li>
+                                        <a class="dropdown-item" href="/ChangePassword?Language=1">
+                                            <div class="d-flex align-items-center">
+                                                <div class="ico-sign-in me-3">
+                                                    <i class="fa-solid fa-key"></i>
+                                                </div>
+                                                <div>
+                                                    <h3 class="mb-0 h5 text-transform-none ls-0">
+                                                        استعادة كلمة المرور
+                                                    </h3>
+                                                    <p class="text-black-50 text-transform-none ls-0 mb-0">
+                                                        عند نسيانها
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        </a>
+                                    </li>
+                                </ul>
+                            </div>
+
+                            <a href="/Auth/About?Language=1#section-apps"
+                               class="button button-xlarge button-border button-circle button-color-2"
+                               data-animate="fadeIn" data-delay="1500">
+                                تطبيقات الأجهزة الذكية
+                            </a>
+                        </div>
+                        <div class="shape-4">
+                            <img src="https://vstedu.azureedge.net/v27/assets/landing/images/slider/shape-4.png?v=14" alt="" />
+                        </div>
+                        <div class="shape-5">
+                            <img src="https://vstedu.azureedge.net/v27/assets/landing/images/slider/shape-5.png?v=14" alt="" />
+                        </div>
+                        <div class="shape-6">
+                            <img src="https://vstedu.azureedge.net/v27/assets/landing/images/slider/shape-6.png?v=14" alt="" />
+                        </div>
+                    </div>
+                    <div class="col-lg-7 marquee__wrapper d-none d-lg-block">
+                        <div class="d-flex justify-content-end align-items-start gap-3">
+                            <div class="marquee__col">
+                                <div class="marquee">
+                                    <div class="marquee__inner-wrap">
+                                        <div class="marquee__inner">
+                                            <div class="marquee__img"
+                                                 style="background-image: url(https://vstedu.azureedge.net/v27/assets/landing/images/slider/row-1-1.png?v=14); height: 420px;min-height: 420px;">
+                                            </div>
+                                            <div class="marquee__img"
+                                                 style="background-image: url(https://vstedu.azureedge.net/v27/assets/landing/images/slider/row-1-2.png?v=14); height: 400px;min-height: 400px;">
+                                            </div>
+                                            <div class="marquee__img"
+                                                 style="background-image: url(https://vstedu.azureedge.net/v27/assets/landing/images/slider/row-1-3.png?v=14); height: 400px;min-height: 400px;">
+                                            </div>
+                                            <div class="marquee__img"
+                                                 style="background-image: url(https://vstedu.azureedge.net/v27/assets/landing/images/slider/row-1-2.png?v=14); height: 400px;min-height: 400px;">
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="marquee__col">
+                                <div class="marquee">
+                                    <div class="marquee__inner-wrap">
+                                        <div class="marquee__inner">
+                                            <div class="marquee__img"
+                                                 style="background-image: url(https://vstedu.azureedge.net/v27/assets/landing/images/slider/row-2-2.png?v=14); height: 460px;min-height: 460px;">
+                                            </div>
+                                            <div class="marquee__img"
+                                                 style="background-image: url(https://vstedu.azureedge.net/v27/assets/landing/images/slider/row-2-3.png?v=14); height: 320px;min-height: 320px;">
+                                            </div>
+                                            <div class="marquee__img"
+                                                 style="background-image: url(https://vstedu.azureedge.net/v27/assets/landing/images/slider/row-2-1.png?v=14); height: 175px;min-height: 175px;">
+                                            </div>
+                                            <div class="marquee__img"
+                                                 style="background-image: url(https://vstedu.azureedge.net/v27/assets/landing/images/slider/row-2-2.png?v=14); height: 460px;min-height: 460px;">
+                                            </div>
+                                            <div class="marquee__img"
+                                                 style="background-image: url(https://vstedu.azureedge.net/v27/assets/landing/images/slider/row-2-3.png?v=14); height: 320px;min-height: 320px;">
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="marquee__col">
+                                <div class="marquee">
+                                    <div class="marquee__inner-wrap">
+                                        <div class="marquee__inner">
+                                            <div class="marquee__img"
+                                                 style="background-image: url(https://vstedu.azureedge.net/v27/assets/landing/images/slider/row-3-1.png?v=14); height: 435px;min-height: 435px;">
+                                            </div>
+                                            <div class="marquee__img"
+                                                 style="background-image: url(https://vstedu.azureedge.net/v27/assets/landing/images/slider/row-3-2.png?v=14); height: 175px; min-height: 175px;">
+                                            </div>
+                                            <div class="marquee__img"
+                                                 style="background-image: url(https://vstedu.azureedge.net/v27/assets/landing/images/slider/row-3-3.png?v=14); height: 435px; min-height: 435px;">
+                                            </div>
+                                            <div class="marquee__img"
+                                                 style="background-image: url(https://vstedu.azureedge.net/v27/assets/landing/images/slider/row-3-1.png?v=14); height: 435px;min-height: 435px;">
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="shape-1">
+        <img src="https://vstedu.azureedge.net/v27/assets/landing/images/slider/shape-1.png?v=14" alt="" />
+    </div>
+    <div class="shape-2">
+        <img src="https://vstedu.azureedge.net/v27/assets/landing/images/slider/shape-2.png?v=14" alt="" />
+    </div>
+    <div class="shape-3">
+        <img src="https://vstedu.azureedge.net/v27/assets/landing/images/slider/shape-3.png?v=14" alt="" />
+    </div>
+</section>
+
+<section id="section-events" class="page-section d-flex flex-column align-items-center">
+    <div class="container">
+        <div class="d-flex align-items-center justify-content-center flex-column flex-lg-row mb-3 mb-lg-5">
+            <h2 class="mb-0 me-lg-5 me-0">
+                الإعلانات والفعاليات
+            </h2>
+            <div class="d-flex ms-0 ms-lg-5 mt-3 mt-lg-0 events-nav" data-carousel-id="events-list">
+                <button data-carousel-action="prev" class="btn btn-outline-dark rounded-circle btn-icon me-3"
+                        aria-label="Previous">
+                    <i class='fa-regular fa-arrow-right-long mx-1'></i>
+                </button>
+                <button data-carousel-action="next" class="btn btn-outline-dark rounded-circle btn-icon"
+                        aria-label="Next">
+                    <i class='fa-regular fa-arrow-left-long mx-1'></i>
+                </button>
+            </div>
+        </div>
+    </div>
+    <div class="container-xxxl container-fluid">
+        <div id="events-list" class="owl-carousel carousel-widget" data-nav="false" data-margin="20"
+             data-items-xs="1" data-items-sm="1" data-items-md="1" data-items-lg="1" data-items-xl="1"
+             data-mouseDrag="true">
+        </div>
+    </div>
+
+</section>
+
+
+<section id="section-updates" class="page-section d-flex align-items-center">
+    <div class="row w-100 m-0">
+        <div class="col-lg-4 offset-lg-1">
+            <div class="col-padding ps-6">
+                <h2>
+                    جديد
+                    <br />
+                    مدرستي
+                </h2>
+                <p class="fw-light">
+                    تعرَف في هذا القسم على الخدمات الجديدة التي تقدمها منصة مدرستي.
+                </p>
+            </div>
+        </div>
+        <div class="col-lg-7 pe-lg-0">
+            <div id="updates-list" class="owl-carousel carousel-widget mb-3" data-nav="false" data-margin="20"
+                 data-items-xs="1" data-items-sm="1" data-items-md="1" data-items-lg="1" data-items-xl="1"
+                 data-mouseDrag="true">
+                <div class="oc-item">
+                    <div class="update-item">
+                        <img src="https://vstedu.azureedge.net/v27/assets/images/svg/book-info-icon-96-96.svg?v=14" class="img-fluid svg" alt="" srcset="">
+                        <h4>
+                            سجل المتابعة اليومي.
+
+                        </h4>
+                        <p>
+
+                                    وهو توثيق ورصد آلي لدرجات الطلبة في الواجبات والاختبارات والمهام الأدائية في منصة
+                                    مدرستي خلال الفصل الدراسي. ومن بين المزايا:
+                                
+                        </p>
+                        <ul>
+                            <li>
+                                تنظيم عملية رصد درجات المهام المختلفة في السجل بشكل آلي.
+                            </li>
+                            <li>
+                                إضافة ورصد المهام التي تم تسليمها خارج نطاق المنصة.
+                            </li>
+                            <li>
+                                تصدير ملف اكسل أو وورد لأعمال الطلبة في سجلات الفصول المدرسية.
+                            </li>
+                            <li>
+                                إضافة وحذف التكليفات المسندة للطلبة من السجل.
+                            </li>
+                            <li>
+                                حساب المجموع النهائي آليًا.
+                            </li>
+                        </ul>
+
+                    </div>
+                </div>
+                <div class="oc-item">
+                    <div class="update-item">
+                        <img src="https://vstedu.azureedge.net/v27/assets/images/svg/book-info-icon-96-96.svg?v=14" class="img-fluid svg" alt="" srcset="">
+
+                        <h4>
+                            دور مشرف الإدارة المدرسية.
+                        </h4>
+                        <p>
+
+                                    يمكن الدور مشرفي ومشرفات الإدارة المدرسية من الإطلاع على بيانات جميع المدارس التابعة
+                                    لهم لتحقيق اهدافهم بفاعلية
+                                    وكفاءة. ومن تلك الأهداف :
+                                
+                        </p>
+                        <ul>
+                            <li>
+
+                                        متابعة أداء المدارس التابعة لمكتب التعليم وتقديم الدعم اللازم لضمان نجاح العملية
+                                        التعليمية.
+                                    
+                            </li>
+                            <li>
+                                التواصل الفعال مع مدراء المدارس.
+
+                            </li>
+                            <li>
+                                الاطلاع على أوضاع المدارس ودراسة مشكلاتها.
+
+                            </li>
+                        </ul>
+
+                    </div>
+                </div>
+                <div class="oc-item">
+                    <div class="update-item">
+                        <img src="https://vstedu.azureedge.net/v27/assets/images/svg/book-info-icon-96-96.svg?v=14" class="img-fluid svg" alt="" srcset="">
+
+                       
+                        <h4>
+                            تطوير أداة إعداد الدروس.
+                        </h4>
+                        <p>
+                            المزايا الجديدة :
+                        </p>
+                        <ul>
+                            <li>
+                                إعداد الدرس لأكثر من فصل في نفس الوقت.
+                            </li>
+                            <li>
+                                الاستفادة من الدروس المعدة سابقًا.
+                            </li>
+                            <li>
+                                إنشاء واجب أو اختبار أو نشاط أثناء إعداد الدرس.
+                            </li>
+                            <li>
+                                استعراض حالات إعداد الدرس من صفحة الجدول الدراسي.
+                            </li>
+                        </ul>
+
+                    </div>
+                </div>
+                <div class="oc-item">
+                    <div class="update-item">
+                        <img src="https://vstedu.azureedge.net/v27/assets/images/svg/book-info-icon-96-96.svg?v=14" class="img-fluid svg" alt="" srcset="">
+
+                     
+                        <h4>
+                            غرفة المصادر بمحتوى إثرائي جديد.
+                        </h4>
+                        <p>
+
+
+                                    أثريت غرفة المصادر التعليمية في حساب الطالب بمحتوى رقمي جديد ، يدعم العملية
+                                    التعليمية ويعزز مصادر المعرفة
+                                    المتنوعة في منصة مدرستي ، كما يمكن للمعلم الاطلاع على محتوياتها بالإضافة لنماذج من
+                                    خطط الدروس الخاصة بالمقررات
+                                    المسندة له.
+
+                                                        </p>
+                    </div>
+                </div>
+                <div class="oc-item">
+                    <div class="update-item">
+                        <img src="https://vstedu.azureedge.net/v27/assets/images/svg/book-info-icon-96-96.svg?v=14" class="img-fluid svg" alt="" srcset="">
+
+                    
+                        <h4>
+                            جدول الاختبارات.
+
+                        </h4>
+                        <p>
+
+                                    تُمكن أداة جدول الاختبارات مديري المدارس من إنشاء الجداول في منصة مدرستي وإرسالها
+                                    للطلبة والمعلمين.
+                                                        </p>
+                    </div>
+                </div>
+                <div class="oc-item">
+                    <div class="update-item">
+                        <img src="https://vstedu.azureedge.net/v27/assets/images/svg/book-info-icon-96-96.svg?v=14" class="img-fluid svg" alt="" srcset="">
+
+                        <h4>
+                            رصد حضور وغياب الطلبة آليًا للحصص المتزامنة.
+
+
+                        </h4>
+                        <p>
+
+                                    استثمارًا للوقت والجهد يتم رصد حضور وغياب الطلبة للدروس المتزامنة آليًا في منصة
+                                    مدرستي ويمكن للمعلم تعديل حالة
+                                    حضور الطلبة عند الحاجة.
+                                
+                        </p>
+                    </div>
+                </div>
+                <div class="oc-item">
+                    <div class="update-item">
+                        <img src="https://vstedu.azureedge.net/v27/assets/images/svg/book-info-icon-96-96.svg?v=14" class="img-fluid svg" alt="" srcset="">
+
+                        <h4>
+
+                                    إرسال نموذج الاختبار من حساب المعلم إلى حساب المشرف.
+
+                                                        </h4>
+                        <p>
+
+                                    تتيح هذه الميزة تبادل الخبرات بين المشرف التربوي والمعلم من خلال مشاركة نماذج
+                                    الاختبارات مع المشرف لمراجعتها
+                                    وتقديم التغذية الراجعة.
+                                
+                        </p>
+
+                    </div>
+                </div>
+                <div class="oc-item">
+                    <div class="update-item">
+                        <img src="https://vstedu.azureedge.net/v27/assets/images/svg/book-info-icon-96-96.svg?v=14" class="img-fluid svg" alt="" srcset="">
+
+                        <h4>
+                            إشعارات مستوى الطلاب.
+
+                        </h4>
+                        <p>
+
+                                    خدمة تمكن المعلم من إرسال إشعارات مباشرة لأولياء الأمور والموجه الطلابي حول مستوى
+                                    أداء الطلاب في منصة مدرستي
+                                    لتعزز التواصل الفعال بين المعلم وولي الأمر.
+                                                        </p>
+                    </div>
+                </div>
+                <div class="oc-item">
+                    <div class="update-item">
+                        <img src="https://vstedu.azureedge.net/v27/assets/images/svg/book-info-icon-96-96.svg?v=14" class="img-fluid svg" alt="" srcset="">
+
+
+                        <h4>
+                            لوحات النقاش.
+
+                        </h4>
+                        <p>
+
+                                    خدمة تتيح للمعلم إدراج مواضيع من المقرر للنقاش وتعميق الفهم وتبادل الخبرات بين
+                                    الطلاب وتعزيز بيئة تعلم تعاونية.
+                                                        </p>
+                    </div>
+                </div>
+                <div class="oc-item">
+                    <div class="update-item">
+                        <img src="https://vstedu.azureedge.net/v27/assets/images/svg/book-info-icon-96-96.svg?v=14" class="img-fluid svg" alt="" srcset="">
+
+                        <h4>
+                            خدمة تيسير الوصول لطلاب ذوي الإعاقة.
+
+                        </h4>
+                        <p>
+
+                                    تهدف الخاصية لدعم مستخدمي منصة مدرستي من فئة ذوي الإعاقة البصرية بتوفير حالات مختلفة
+                                    لضبط إعدادات الشاشة.
+                                                        </p>
+
+                    </div>
+                </div>
+                <div class="oc-item">
+                    <div class="update-item">
+                        <img src="https://vstedu.azureedge.net/v27/assets/images/svg/book-info-icon-96-96.svg?v=14" class="img-fluid svg" alt="" srcset="">
+
+                        <h4>
+                            خدمة الالتزام المدرسي.
+
+                        </h4>
+                        <p>
+
+                                    لتقليل الاستخدام الورقي وضمان وصول الإقرار للطلبة وأولياء الأمور.
+                                                        </p>
+
+                    </div>
+                </div>
+            </div>
+            <div class="d-flex flex-column flex-lg-row align-items-center justify-content-between gap-3 updates-nav">
+                <span id="slide-fraction">1/11</span>
+                <div class="d-flex" data-carousel-id="updates-list">
+                    <button data-carousel-action="prev"
+                            class="btn btn-outline-dark rounded-circle btn-icon me-2" aria-label="Previous">
+                        <i class='fa-regular fa-arrow-right-long mx-1'></i>
+                    </button>
+                    <button data-carousel-action="next" class="btn btn-outline-dark rounded-circle btn-icon"
+                            aria-label="Next">
+                        <i class='fa-regular fa-arrow-left-long mx-1'></i>
+                    </button>
+                </div>
+            </div>
+
+        </div>
+    </div>
+</section>
+
+
+<section id="section-resources" class="page-section">
+    <div class="resources-side-1">
+        <h2>
+            <span>
+                اكتشف
+            </span>
+            المصادر التعليمية
+        </h2>
+        <p>
+
+                    تتنوع المصادر التعليمية المقدمة ما بين مرئية كالفيديوهات، ومجسمات إلكترونية ثلاثية الأبعاد. تنفيذ
+                    الفصول
+                    الافتراضية
+                    للإسهام في إنجاز العملية التعليمية.
+                
+        </p>
+    </div>
+    <div class="resources-side-2">
+        <div class="row g-0 flex-1">
+            <div class="col-lg-6">
+                <img class="d-block resources-img-fill" src="https://vstedu.azureedge.net/v27/images/section-resrouces/arabsstock_p55755.jpg?v=14"
+                     alt="Madrasati Books">
+            </div>
+            <div class="col-lg-6 bg-color-1 resources-content">
+                <div class="rs-num counter">
+                    <span data-from="1" data-to="500" data-refresh-interval="10" data-speed="1600"></span>
+                    +
+                </div>
+                <div class="rs-content">
+                    كتاب لجميع المراحل التعليمية
+                </div>
+                <a href="/SubjectBooks?Language=1">
+                    اكتشف الكتب الالكترونية
+                    <i class='fa-regular fa-arrow-left-long ms-2'></i>
+                </a>
+            </div>
+        </div>
+        <div class="row g-0 flex-1">
+            <div class="col-lg-6 bg-color-2 resources-content order-1 order-lg-0">
+                <div class="rs-num counter">
+                    <span data-from="1" data-to="34" data-refresh-interval="10" data-speed="1600"></span>
+                    +
+                </div>
+                <div class="rs-content">
+                    <span class="d-block">
+                        قناة
+                    </span>
+                    تعليمية
+                </div>
+                <a href="/Auth/IeanChanel?Language=1">
+                    تابع قنوات عين
+                    <i class='fa-regular fa-arrow-left-long ms-2'></i>
+                </a>
+            </div>
+            <div class="col-lg-6 order-0 order-lg-1">
+                <img class="d-block resources-img-fill" src="https://vstedu.azureedge.net/v27/images/section-resrouces/1931623760.jpg?v=14"
+                     alt="iEn Tv">
+            </div>
+        </div>
+    </div>
+</section>
+
+<section id="section-stats" class="page-section dark">
+    <div class="section-stats-overlay"></div>
+    <div class="container-fluid position-relative d-flex flex-column h-100">
+        <h2>
+            مدرستي في أرقام
+        </h2>
+        <p class="text-center fw-light mb-5">
+            ساهمت منصة مدرستي في الحفاظ على البيئة حيث:
+        </p>
+        <div class="row mt-auto px-lg-3">
+            <div class="col-md col-step">
+                <img src="https://vstedu.azureedge.net/v27/assets/landing/images/section-how/ic-1.svg?v=14" />
+                <div class="step-h">
+                    وفرت
+                </div>
+                <div class="step-n">
+                    451
+                    <span>
+                        مليار
+                    </span>
+                </div>
+                <div class="step-t">
+                    واط من الطاقة
+                </div>
+            </div>
+            <div class="col-md col-step">
+                <img src="https://vstedu.azureedge.net/v27/assets/landing/images/section-how/ic-2.svg?v=14" />
+                <div class="step-h">
+                    حافظت على أكثر من
+                </div>
+                <div class="step-n">
+                    1.54
+                    <span>
+                        مليون
+                    </span>
+                </div>
+                <div class="step-t">
+                    شجرة
+                </div>
+            </div>
+            <div class="col-md col-step">
+                <img src="https://vstedu.azureedge.net/v27/assets/landing/images/section-how/ic-3.svg?v=14" />
+                <div class="step-h">
+                    قللت
+                </div>
+                <div class="step-n">
+                    34
+                    <span>
+                        مليون
+                    </span>
+                </div>
+                <div class="step-t">
+                    كيلوجرام من النفايات الصلبة
+                </div>
+            </div>
+            <div class="col-md col-step">
+                <img src="https://vstedu.azureedge.net/v27/assets/landing/images/section-how/ic-4.svg?v=14" />
+                <div class="step-h">
+                    وفرت أكثر من
+                </div>
+                <div class="step-n">
+                    5.18
+                    <span>
+                        مليار
+                    </span>
+                </div>
+                <div class="step-t">
+                    لتر من المياه
+                </div>
+            </div>
+            <div class="col-md col-step">
+                <img src="https://vstedu.azureedge.net/v27/assets/landing/images/section-how/ic-5.svg?v=14" />
+                <div class="step-h">
+                    قللت
+                </div>
+                <div class="step-n">
+                    284
+                    <span>
+                        مليون
+                    </span>
+                </div>
+                <div class="step-t">
+                    متر مكعب من انبعاثات غاز ثاني أكسيد الكربون
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+<section id="section-testi" class="page-section">
+    <div class="testi-side-1">
+        <h2>
+            <span>
+                ماذا قالو
+            </span>
+            عن مدرستي؟
+        </h2>
+        <p>
+
+                    تعرَف على بعض آراء المستفيدين من خدمات منصة مدرستي على شبكات التواصل الاجتماعي، رأيك يهمنا شاركنا
+                    رأيك و ساهم في
+                    تطوير خدماتنا.
+                        </p>
+        <div>
+            <a href="https://customerexp.moe.gov.sa/s/Nov0aaxR1GuV8Mo7LQsa" class="button button-border button-circle button-dark m-0 external-confirm">
+                شاركنا رأيك
+            </a>
+        </div>
+
+    </div>
+    <div class="testi-side-2">
+        <div class="testi-slider d-flex flex-column gap-4">
+            <div class="testi-card">
+                <div class="d-flex align-items-center mb-2">
+                    <img class="me-2" src="https://vstedu.azureedge.net/v27/images/profile.png?v=14" alt="profile" />
+                    <span class="fw-semibold">
+                        سعد بن بريك القرني
+                    </span>
+                    <img class="ms-auto" src="https://vstedu.azureedge.net/v27/images/twitter-x.svg?v=14" alt="X" />
+                </div>
+                <p class="mb-2">
+                    بلا شك هي تجربة رائعة وماهي إلا نتاج توفيق الله ثم ترجمة لدعم القيادة لقطاع التعليم الذي
+                    يحظى بدعم سخي لا محدود
+                    وجهد وزارة التعليم ممثلا بمعالي الوزير وفريقه ولا ننسى أن المعلمين هم من كانو مصدر
+                    الإشعاع
+                    لهذه التجربة والوقود
+                    الحقيقي في قطاع التعليم. هنيئا للوطن بمعلميه ومعلماته.
+                </p>
+            </div>
+            <div class="testi-card">
+                <div class="d-flex align-items-center mb-2">
+                    <img class="me-2" src="https://vstedu.azureedge.net/v27/images/profile.png?v=14" alt="profile" />
+                    <span class="fw-semibold">
+                        روضة بثينة الأنصارية
+                    </span>
+                    <img class="ms-auto" src="https://vstedu.azureedge.net/v27/images/twitter-x.svg?v=14" alt="X" />
+                </div>
+                <p class="mb-2">
+                    جميلة جدا و بإمكان الأمهات إنزال مقاطع صوتية للأطفال سور قرآن والأدعية و أيضا الأعمال
+                    وكل ما
+                    يتم عمله من قبل
+                    الأطفال شكرا لكل من ساهم في هذه المنصة الجميلة ❤️ ❤️ ❤️.
+                </p>
+            </div>
+            <div class="testi-card">
+                <div class="d-flex align-items-center mb-2">
+                    <img class="me-2" src="https://vstedu.azureedge.net/v27/images/profile.png?v=14" alt="profile" />
+                    <span class="fw-semibold">
+                        هند الشهراني
+                    </span>
+                    <img class="ms-auto" src="https://vstedu.azureedge.net/v27/images/twitter-x.svg?v=14" alt="X" />
+                </div>
+                <p class="mb-2">
+                    شكرا حكومتنا الرشيدة شكرا لمن قام على هذا التعليم شكرا وزارة التعليم وأتمنى أن تكون
+                    الدراسة
+                    هذه السنة عن بعد لأنه
+                    تعليم ناجح عبر هذه المنصة.
+                </p>
+            </div>
+            <div class="testi-card">
+                <div class="d-flex align-items-center mb-2">
+                    <img class="me-2" src="https://vstedu.azureedge.net/v27/images/profile.png?v=14" alt="profile" />
+                    <span class="fw-semibold">
+                        بدر عبد الواحد
+                    </span>
+                    <img class="ms-auto" src="https://vstedu.azureedge.net/v27/images/twitter-x.svg?v=14" alt="X" />
+                </div>
+                <p class="mb-2">
+                    منصة مدرستي فخر لنا جميعا ❤️ 🇸🇦.
+                </p>
+            </div>
+
+        </div>
+    </div>
+</section>
+<section id="section-partners" class="page-section">
+    <div class="container">
+        <h2>روابط ذات صلة</h2>
+        <ul class="clients-grid row row-cols-2 row-cols-md-3 row-cols-lg-4 mb-0">
+            <li class="col">
+                <a target="_blank" href="https://moe.gov.sa/ar/pages/default.aspx" class="external-confirm">
+                    <img src="https://vstedu.azureedge.net/v27/images/logos/moe.png?v=14" alt="MOE">
+                </a>
+            </li>
+            <li class="col">
+                <a target="_blank" href="https://noor.moe.gov.sa/NOOR/Login.aspx" class="external-confirm">
+                    <img src="https://vstedu.azureedge.net/v27/images/logos/noor.png?v=14" alt="Noor">
+                </a>
+            </li>
+            <li class="col">
+                <a target="_blank" href="https://www.ien.edu.sa/" class="external-confirm">
+                    <img src="https://vstedu.azureedge.net/v27/images/logos/ien.png?v=14"
+                         alt="iEn">
+                </a>
+            </li>
+            <li class="col">
+                <a target="_blank" href="https://nataeji.moe.gov.sa/" class="external-confirm">
+                    <img src="https://vstedu.azureedge.net/v27/images/logos/results.png?v=14" alt="Results">
+                </a>
+            </li>
+        </ul>
+    </div>
+</section>
+
+
+
+
+
+        <!-- Footer
+        ============================================= -->
+        <footer id="footer">
+            <div class="container dark">
+                <div class="row gutter-50 mb-5">
+                    <div class="col-lg-3 col-md-6 col-sm-6 col-12">
+
+                        <div class="widget widget_links widget-li-noicon">
+                            <h3 class="fw-normal mb-2">
+                                نظرة عامة
+                            </h3>
+                            <ul>
+                                <li>
+                                    <a href="/Auth/About?Language=1" class="fw-light fs-6">
+                                        عن مدرستي
+                                    </a>
+                                </li>
+
+                                <li>
+                                    <a href="/Auth/Policy?Language=1" class="fw-light fs-6">
+                                        سياسة الخصوصية والأمان
+                                    </a>
+                                </li>
+                                <li>
+                                    <a href="/Auth/ServiceLevelAgreement?Language=1" class="fw-light fs-6">
+                                        اتفاقية مستوى الخدمة
+                                    </a>
+                                </li>
+                                <li>
+                                    <a href="/Auth/Digitaletiquette?Language=1" class="fw-light fs-6">
+                                        أداب السلوك الرقمي
+                                    </a>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                    <div class="col-lg-3 col-md-6 col-sm-6 col-12">
+
+                        <div class="widget widget_links widget-li-noicon">
+                            <h3 class="fw-normal mb-2">
+                                الدعم والمساعدة
+                            </h3>
+                            <ul>
+                                <li>
+
+                                    <a href="/Auth/Contact_Support?Language=1#section-faq" class="fw-light fs-6">
+                                        الأسئلة الشائعة
+                                    </a>
+                                </li>
+                                <li>
+                                    <a href="/Guides/Instructions?Language=1" class="fw-light fs-6">
+                                        الأدلة والإرشادات
+                                    </a>
+                                </li>
+                                <li>
+
+                                    <a href="/Auth/Contact_Support?Language=1" class="fw-light fs-6">
+                                        تواصل معنا
+                                    </a>
+                                </li>
+                                <li>
+                                    <a href="https://customerexp.moe.gov.sa/s/Nov0aaxR1GuV8Mo7LQsa" class="fw-light fs-6 external-confirm">
+                                        المقترحات
+                                    </a>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                    <div class="col-lg-3 col-md-6 col-sm-6 col-12">
+
+                        <div class="widget widget_links widget-li-noicon">
+                            <h3 class="fw-normal mb-2">
+                                روابط تهمك
+                            </h3>
+                            <ul>
+                                <li>
+                                    <a target="_blank" href="https://nataeji.moe.gov.sa/"
+                                       class="fw-light fs-6 external-confirm">
+                                        نظام نتائجي
+                                    </a>
+                                </li>
+                                <li>
+                                    <a target="_blank" href="/SubjectBooks?Language=1" class="fw-light fs-6">
+                                        الكتب المدرسية
+                                    </a>
+                                </li>
+                                <li>
+                                    <a target="_blank" href="https://sdl.edu.sa/SDLPortal/ar/Publishers.aspx"
+                                       class="fw-light fs-6 external-confirm">
+                                        المكتبة الرقمية السعودية
+                                    </a>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                    <div class="col-lg-3 col-md-6 col-sm-6 col-12">
+                        <div class="d-flex align-items-center gap-5 justify-content-start flex-row mb-4">
+                            <img src="https://vstedu.azureedge.net/v27/images/logos/2030.svg?v=14" width="82.13" height="54" alt="Vision 2030 Logo" />
+                            <img src="https://vstedu.azureedge.net/v27/images/logos/moe.png?v=14" height="54"
+                                 alt="Ministry of Education Logo" />
+                        </div>
+                        <div class="re-edited-box-icon mb-3">
+                            <a href='https://raqmi.dga.gov.sa/platforms/DigitalStamp/ShowCertificate/361'>
+                                <img src="https://vstedu.azureedge.net/v27/img/stamp-certificate-old.jpg?v=14">
+                            </a>
+                        </div>
+                        <h3 class="fw-normal mb-2">
+                            تابعنا على
+                        </h3>
+                        <div class="d-flex justify-content-md-start">
+                            <a href="https://www.snapchat.com/add/moe_gov?locale=ar" target="_blank"
+                               class="social-icon si-small border-transparent h-bg-snapchat external-confirm">
+                                <img src="https://vstedu.azureedge.net/v27/images/social/snapchat.svg?v=14" alt="Snapchat" />
+                                <img src="https://vstedu.azureedge.net/v27/images/social/snapchat.svg?v=14" alt="Snapchat" />
+                            </a>
+                            <a href="https://www.youtube.com/channel/UCNI3mOncSgbjIJJp01EzgVA"
+                               class="social-icon si-small border-transparent h-bg-youtube external-confirm" target="_blank">
+                                <img src="https://vstedu.azureedge.net/v27/images/social/youtube.svg?v=14" alt="Youtube" />
+                                <img src="https://vstedu.azureedge.net/v27/images/social/youtube.svg?v=14" alt="Youtube" />
+                            </a>
+                            <a href="https://www.instagram.com/moe_gov_sa/"
+                               class="social-icon si-small border-transparent h-bg-instagram external-confirm" target="_blank">
+                                <img src="https://vstedu.azureedge.net/v27/images/social/instagram.svg?v=14" alt="Instagram" />
+                                <img src="https://vstedu.azureedge.net/v27/images/social/instagram.svg?v=14" alt="Instagram" />
+                            </a>
+                            <a href="https://x.com/moe_gov_sa"
+                               class="social-icon si-small border-transparent h-bg-x-twitter external-confirm" target="_blank">
+                                <i class="fa-brands fa-x-twitter"></i>
+                                <i class="fa-brands fa-x-twitter"></i>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+                <hr />
+                <div class="row align-items-center justify-content-between col-mb-30">
+                    <div class="col-12 col-lg-auto text-center text-lg-start fw-light">
+                        جميع الحقوق محفوظة لوزارة التعليم © 2026 م
+                    </div>
+
+                    <div class="col-12 col-lg-auto text-center text-lg-end fw-light">
+                        Version 6.6.0
+                    </div>
+                </div>
+
+            </div>
+        </footer>
+
+        <!-- #footer end -->
+
+    </div><!-- #wrapper end -->
+
+    <div class="modal fade" id="homepagesearch" tabindex="-1" aria-labelledby="search" data-bs-backdrop="static"
+         aria-modal="true" role="dialog">
+        <div class="modal-dialog modal-dialog-centered modal-lg">
+            <div class="modal-content" style="min-height: 300px;;justify-content: center;">
+                <div class="modal-header custom-header d-flex align-items-center flex-column py-0 border-0 pe-5 ps-0">
+                    <button type="button" data-bs-dismiss="modal"
+                            style="border-radius: 50%;width: 40px;height: 40px;background-color: #f1f1f1;"
+                            class="btn d-flex align-items-center justify-content-center ms-auto btn-lg rounded-round">
+                        <i class="fa-solid fa-x" style="opacity: 0.5;"></i>
+                    </button>
+
+                    <h5 class="modal-title fw-normal text-start w-100 fs-5 ps-5">
+                        نساعدك للوصول إلى ما تبحث عنه 
+                    </h5>
+                </div>
+
+                <div style="flex: 0;" class="modal-body px-5">
+                    <form class="search-form input-group input-group-lg mb-0" method="get" action="/SearchPages?roleId=E1A910ABA136295214C496EF4E81FE48">
+                        <span class="input-group-text border-end-0 me-0 bg-white"><i class="fa-light fa-search"></i></span>
+                        <input class="form-control border-start-0 ps-0 block-search" type="text"
+                               aria-label="Search" id="query" name="query" size="15" maxlength="128" placeholder=ابحث هنا ... class="form-control form-search typeahead px-5" onkeypress="event.keyCode == 13 && $(this).closest('form').submit()">
+                        <button type="submit" class="btn btn-primary ms-3 rounded-2 text-white fs-6" onkeypress="event.keyCode == 13 && $(this).closest('form').submit()">
+                            <i class="fa-solid fa-search me-1"></i>
+                            البحث
+                        </button>
+                    </form>
+                </div>
+
+
+            </div>
+        </div>
+    </div>
+
+
+    <!-- External Link Modal -->
+    <div class="modal fade" id="external-redirect" data-bs-backdrop="static" tabindex="-1"
+         aria-labelledby="externalRedirect" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-body p-4 text-center">
+                    <p class="mb-3 fs-5">
+                        سيتم تحويلك لموقع خارجي
+                    </p>
+                    <div class="d-flex align-items-center justify-content-center">
+                        <button data-bs-dismiss="modal" type="button" class="btn btn-link rounded-3">إلغاء</button>
+                        <a id="external-link" href="#" target="_blank"
+                           class="btn btn-primary text-white rounded-3">موافق</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <input type="hidden" id="searchPagesURL" value="/SearchPages/Search?roleId=E1A910ABA136295214C496EF4E81FE48" />
+    <input type="hidden" id="searchPagesRedirectURL" value="/SearchPages/RedirectToPageUrl?pageUrlId=-1&amp;url=-2" />
+
+    <!-- JavaScripts
+    ============================================= -->
+    <script src="https://vstedu.azureedge.net/v27/assets/js/jquery/jquery.min.js?v=14"></script>
+    <script src="https://vstedu.azureedge.net/v27/assets/landing/js/plugins.min.js?v=14"></script>
+    <script src="https://vstedu.azureedge.net/v27/assets/landing/js/functions.bundle.js?v=14"></script>
+    <script src="https://vstedu.azureedge.net/v27/assets/landing/js/scripts.js?v=14"></script>
+    <script src="https://vstedu.azureedge.net/v27/content/homepagenew/lib/typeahead.js/typeahead.bundle.min.js?v=14"></script>
+    <script src="https://vstedu.azureedge.net/v27/content/homepagenew/lib/swiper/swiper-bundle.min.js?v=14"></script>
+    <script src="https://vstedu.azureedge.net/v27/content/homepagenew/js/search.js?v=14"></script>
+    <script type="module" src="https://muneer.cx/static/v1/js/loader.min.js?cid=5ccff317-f629-47e9-b153-ca4532e74a56" id="muneer-loader-js"></script>
+    <script>
+        jQuery(document).ready(function () {
+            searchPages();
+            // Adding a class to an element
+            jQuery(".twitter-typeahead").addClass("col-md-12");
+            jQuery("#remote button").click(function () {
+                jQuery(".modal-backdrop").addClass("custom-backdrop");
+            });
+        });
+    </script>
+    
+    <script src="https://vstedu.azureedge.net/v27/src/auth/index.js?v=14" type="text/javascript"></script>
+
+    <link rel="stylesheet" href="https://vstedu.azureedge.net/v27/assets/muneer-tool/css/custom.css?v=14">
+
+  
+</body>
+
+</html>

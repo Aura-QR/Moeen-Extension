@@ -1,0 +1,99 @@
+{
+  "manifest_version": 3,
+  "name": "مُعين",
+  "description": "تبسيط تعديل واعداد الحصص للمعلم",
+  "version": "10.0.3",
+
+  "icons": {
+    "16": "logo/logo-16.png",
+    "48": "logo/logo-48.png",
+    "128": "logo/logo-128.png"
+  },
+
+  "action": {
+    "default_title": "مُعين",
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "logo/logo-16.png",
+      "48": "logo/logo-48.png",
+      "128": "logo/logo-128.png"
+    }
+  },
+
+  "background": {
+    "service_worker": "background.js"
+  },
+
+  "permissions": [
+    "storage"
+  ],
+
+  "host_permissions": [
+    "https://schools.madrasati.sa/*",
+    "https://external.madrasati.sa/*",
+    "https://n8n.abdelati88.shop/*",
+    "https://n8n.qraura.shop/*",
+    "https://k.tahdiri.com/*",
+    "http://localhost:3000/*",
+    "http://localhost:3001/*",
+    "http://127.0.0.1:3000/*",
+    "https://*.moeen.app/*",
+    "https://moeen.app/*"
+  ],
+
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "logo/*"
+      ],
+      "matches": [
+        "https://schools.madrasati.sa/*"
+      ]
+    },
+    {
+      "resources": [
+        "madrasati_courses_clean.json",
+        "ee10_lesson_templates.json"
+      ],
+      "matches": [
+        "<all_urls>"
+      ]
+    }
+  ],
+
+  "content_scripts": [
+    {
+      "matches": [
+        "https://schools.madrasati.sa/Teacher/LessonPreparation/*",
+        "https://external.madrasati.sa/Teacher/LessonPreparation/*",
+        "https://schools.madrasati.sa/Teacher/Preparation/*",
+        "https://external.madrasati.sa/Teacher/Preparation/*",
+        "https://schools.madrasati.sa/Teacher/Lessons/*",
+        "https://external.madrasati.sa/Teacher/Lessons/*",
+        "https://schools.madrasati.sa/SchoolSchedule/Schedule/*",
+        "https://external.madrasati.sa/SchoolSchedule/Schedule/*"
+      ],
+      "js": [
+        "shared/constants.js",
+        "content.js"
+      ],
+      "run_at": "document_idle",
+      "all_frames": true
+    },
+    {
+      "matches": [
+        "http://localhost:3000/*",
+        "http://localhost:3001/*",
+        "http://127.0.0.1:3000/*",
+        "https://*.moeen.app/*",
+        "https://moeen.app/*"
+      ],
+      "js": [
+        "moeen_content.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+
+  "options_page": "options.html"
+}
