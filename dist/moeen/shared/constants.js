@@ -2,7 +2,7 @@
   if (!globalScope) return;
 
   globalScope.Moeen2_CONFIG = Object.freeze({
-    APP_NAME: 'مُعين',
+    APP_NAME: 'حضر',
     VERSION: '10.0.3',
     STORAGE_KEYS: Object.freeze({
       AUTOMATION_STATE: 'automationState',

@@ -1448,7 +1448,7 @@
       iconWrap.appendChild(logoImg);
       var titleGroup = document.createElement("div");
       var titleEl = document.createElement("div");
-      titleEl.textContent = "\u0645\u064F\u0639\u064A\u0646"; // مُعين
+      titleEl.textContent = "حضر"; // حضر
       titleEl.style.cssText = "font-size:15px;font-weight:900;color:#16324f;line-height:1.2;letter-spacing:-0.3px";
       var subtitleEl = document.createElement("div");
       subtitleEl.textContent = "\u0644\u0648\u062D\u0629 \u0627\u0644\u062A\u062D\u0636\u064A\u0631 \u0627\u0644\u062C\u0645\u0627\u0639\u064A"; // لوحة التحضير الجماعي

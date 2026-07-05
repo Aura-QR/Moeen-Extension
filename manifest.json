@@ -1,22 +1,22 @@
 {
   "manifest_version": 3,
-  "name": "معين",
+  "name": "حضر",
   "description": "تبسيط تعديل واعداد الحصص للمعلم",
   "version": "10.0.3",
 
   "icons": {
-    "16": "logo/logo-16.png",
-    "48": "logo/logo-48.png",
-    "128": "logo/logo-128.png"
+    "16": "logo/logo-16.jpeg",
+    "48": "logo/logo-48.jpeg",
+    "128": "logo/logo-128.jpeg"
   },
 
   "action": {
-    "default_title": "مُعين",
+    "default_title": "حضر",
     "default_popup": "popup.html",
     "default_icon": {
-      "16": "logo/logo-16.png",
-      "48": "logo/logo-48.png",
-      "128": "logo/logo-128.png"
+      "16": "logo/logo-16.jpeg",
+      "48": "logo/logo-48.jpeg",
+      "128": "logo/logo-128.jpeg"
     }
   },
 
