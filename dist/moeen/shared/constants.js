@@ -4,6 +4,8 @@
   globalScope.Moeen2_CONFIG = Object.freeze({
     APP_NAME: 'حضر',
     VERSION: '10.0.3',
+    API_BASE_URL: 'http://localhost:8000/api',
+    AUTH_SESSION_KEY: 'HADAR_AUTH',
     STORAGE_KEYS: Object.freeze({
       AUTOMATION_STATE: 'automationState',
       DEFAULT_SELECTOR: 'defaultSelector',

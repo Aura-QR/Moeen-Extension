@@ -1,11 +1,12 @@
 /**
- * popup.js — لوحة تحكم إضافة مُعين-2
- * يدير الإعدادات المحلية الخاصة بالامتداد فقط.
+ * popup.js — لوحة تحكم امتداد حضر
+ * يدير تسجيل الدخول والإعدادات المحلية الخاصة بالامتداد.
  */
 
 (function () {
     'use strict';
 
+    // ── Config ────────────────────────────────────────────────────────────
     const CONFIG = globalThis.Moeen2_CONFIG || {};
     const STORAGE_KEYS = CONFIG.STORAGE_KEYS || {};
     const AUTOCLICK_DEFAULTS = CONFIG.AUTOCLICK_DEFAULTS || { interval: 1200, maxRetries: 20 };
@@ -25,14 +26,256 @@
         }
     };
 
-    const defaultSelectorInput = document.getElementById('defaultSelector');
-    const siteProfilesTextarea = document.getElementById('siteProfiles');
-    const jsonErrMsg = document.getElementById('jsonErrMsg');
-    const saveBtn = document.getElementById('saveBtn');
-    const startWeekBtn = document.getElementById('startWeekBtn');
-    const statusEl = document.getElementById('status');
+    const AUTH_SESSION_KEY = CONFIG.AUTH_SESSION_KEY || 'HADAR_AUTH';
+    const API_BASE_URL = CONFIG.API_BASE_URL || 'https://librechat-assiut-moeen-backend.tfgpna.easypanel.host/api';
+
     const LEGACY_LOCAL_KEYS = ['token', 'quota'];
     const LEGACY_SYNC_KEYS = ['apiHost', 'offlineMode'];
+
+    // ── DOM refs ─────────────────────────────────────────────────────────────
+    // Settings elements (inside dashboard screen)
+    const defaultSelectorInput = document.getElementById('defaultSelector');
+    const siteProfilesTextarea  = document.getElementById('siteProfiles');
+    const jsonErrMsg            = document.getElementById('jsonErrMsg');
+    const saveBtn               = document.getElementById('saveBtn');
+    const startWeekBtn          = document.getElementById('startWeekBtn');
+    const statusEl              = document.getElementById('status');
+
+    // Auth / login elements
+    const loginEmailEl     = document.getElementById('loginEmail');
+    const loginPasswordEl  = document.getElementById('loginPassword');
+    const loginErrorEl     = document.getElementById('loginError');
+    const loginBtn         = document.getElementById('loginBtn');
+    const passwordToggle   = document.getElementById('passwordToggle');
+    const logoutBtn        = document.getElementById('logoutBtn');
+
+    // User info display
+    const userNameDisplay  = document.getElementById('userNameDisplay');
+    const userEmailDisplay = document.getElementById('userEmailDisplay');
+
+    // ── Screen management ────────────────────────────────────────────────────
+    function showScreen(name) {
+        document.getElementById('screen-login').style.display     = name === 'login'     ? 'block' : 'none';
+        document.getElementById('screen-dashboard').style.display = name === 'dashboard' ? 'block' : 'none';
+    }
+
+    // ── Auth storage helpers ─────────────────────────────────────────────────
+    function getAuthSession() {
+        return new Promise(r => chrome.storage.local.get(AUTH_SESSION_KEY, d => r(d[AUTH_SESSION_KEY] || null)));
+    }
+
+    function saveAuthSession(data) {
+        return new Promise(r => chrome.storage.local.set({ [AUTH_SESSION_KEY]: data }, r));
+    }
+
+    function clearAuthSession() {
+        return new Promise(r => chrome.storage.local.remove(AUTH_SESSION_KEY, r));
+    }
+
+    // ── Login error helper ───────────────────────────────────────────────────
+    function showLoginError(msg) {
+        loginErrorEl.textContent = msg;
+        loginErrorEl.style.display = 'block';
+    }
+
+    function clearLoginError() {
+        loginErrorEl.textContent = '';
+        loginErrorEl.style.display = 'none';
+    }
+
+    function setLoginLoading(isLoading) {
+        loginBtn.disabled = isLoading;
+        loginBtn.classList.toggle('loading', isLoading);
+        loginBtn.textContent = isLoading ? '' : 'تسجيل الدخول';
+    }
+
+    // ── Populate user display ────────────────────────────────────────────────
+    function populateUserDisplay(session) {
+        if (!session || !session.user) return;
+        if (userNameDisplay)  userNameDisplay.textContent  = session.user.name  || '—';
+        if (userEmailDisplay) userEmailDisplay.textContent = session.user.email || '—';
+    }
+
+    // ── Login handler ────────────────────────────────────────────────────────
+    async function handleLogin() {
+        clearLoginError();
+
+        const email    = loginEmailEl.value.trim();
+        const password = loginPasswordEl.value;
+
+        if (!email || !password) {
+            showLoginError('⚠️ يرجى إدخال البريد الإلكتروني وكلمة المرور');
+            return;
+        }
+
+        setLoginLoading(true);
+
+        try {
+            const resp = await fetch(`${API_BASE_URL}/auth/login`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email, password })
+            });
+
+            let data;
+            try { data = await resp.json(); } catch (_) { data = {}; }
+
+            if (!resp.ok) {
+                const errMsg = data.message || data.error || 'فشل تسجيل الدخول. تحقق من بياناتك.';
+                showLoginError(`❌ ${errMsg}`);
+                return;
+            }
+
+            if (!data.token || !data.user) {
+                showLoginError('❌ استجابة غير متوقعة من الخادم. حاول مجدداً.');
+                return;
+            }
+
+            const session = {
+                isAuthenticated: true,
+                token: data.token,
+                tokenType: 'Bearer',
+                user: {
+                    id:    data.user.id,
+                    name:  data.user.name,
+                    email: data.user.email,
+                    role:  data.user.role
+                },
+                sessionCreatedAt: Date.now()
+            };
+
+            await saveAuthSession(session);
+            populateUserDisplay(session);
+            loginPasswordEl.value = '';
+            loginEmailEl.value    = '';
+            showScreen('dashboard');
+            loadSettings();
+
+        } catch (err) {
+            showLoginError('❌ تعذر الاتصال بالخادم. تحقق من اتصالك بالإنترنت.');
+            console.error('[Moeen popup] Login error:', err);
+        } finally {
+            setLoginLoading(false);
+        }
+    }
+
+    // ── Logout handler ───────────────────────────────────────────────────────
+    async function handleLogout() {
+        // Fire-and-forget logout call
+        try {
+            const session = await getAuthSession();
+            if (session && session.token) {
+                fetch(`${API_BASE_URL}/auth/logout`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `${session.tokenType || 'Bearer'} ${session.token}`
+                    }
+                }).catch(() => { /* ignore */ });
+            }
+        } catch (_) { /* ignore */ }
+
+        await clearAuthSession();
+        showScreen('login');
+    }
+
+    // ── Token validation ─────────────────────────────────────────────────────
+    async function validateToken(session) {
+        try {
+            const resp = await fetch(`${API_BASE_URL}/auth/me`, {
+                method: 'GET',
+                headers: {
+                    'Authorization': `${session.tokenType || 'Bearer'} ${session.token}`
+                }
+            });
+            if (resp.status === 401) {
+                await clearAuthSession();
+                return false;
+            }
+            // On success, optionally refresh user data
+            if (resp.ok) {
+                try {
+                    const data = await resp.json();
+                    if (data && (data.name || data.email)) {
+                        // Update stored user info if server returns fresh data
+                        const updated = {
+                            ...session,
+                            user: {
+                                id:    data.id    || session.user.id,
+                                name:  data.name  || session.user.name,
+                                email: data.email || session.user.email,
+                                role:  data.role  || session.user.role
+                            }
+                        };
+                        await saveAuthSession(updated);
+                        return updated;
+                    }
+                } catch (_) { /* use existing session data */ }
+            }
+            return session;
+        } catch (_) {
+            // Network error: allow session to continue (offline tolerance)
+            return session;
+        }
+    }
+
+    // ── Startup auth check ───────────────────────────────────────────────────
+    async function initAuth() {
+        const session = await getAuthSession();
+
+        if (session && session.isAuthenticated && session.token) {
+            // Validate with the server
+            const validSession = await validateToken(session);
+            if (validSession) {
+                populateUserDisplay(validSession === true ? session : validSession);
+                showScreen('dashboard');
+                loadSettings();
+                return;
+            }
+        }
+
+        showScreen('login');
+    }
+
+    // ── Password toggle ──────────────────────────────────────────────────────
+    if (passwordToggle) {
+        passwordToggle.addEventListener('click', () => {
+            if (loginPasswordEl.type === 'password') {
+                loginPasswordEl.type = 'text';
+                passwordToggle.textContent = '🙈';
+                passwordToggle.title = 'إخفاء كلمة المرور';
+            } else {
+                loginPasswordEl.type = 'password';
+                passwordToggle.textContent = '👁️';
+                passwordToggle.title = 'إظهار كلمة المرور';
+            }
+        });
+    }
+
+    // ── Auth event listeners ─────────────────────────────────────────────────
+    if (loginBtn) {
+        loginBtn.addEventListener('click', handleLogin);
+    }
+
+    if (loginPasswordEl) {
+        loginPasswordEl.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') handleLogin();
+        });
+    }
+
+    if (loginEmailEl) {
+        loginEmailEl.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') loginPasswordEl && loginPasswordEl.focus();
+        });
+    }
+
+    if (logoutBtn) {
+        logoutBtn.addEventListener('click', handleLogout);
+    }
+
+    // ════════════════════════════════════════════════════════════════════════
+    // SETTINGS LOGIC (unchanged from original)
+    // ════════════════════════════════════════════════════════════════════════
 
     function showStatus(message, type = 'info', duration = 3500) {
         statusEl.textContent = message;
@@ -46,6 +289,7 @@
 
     function setLoading(isLoading) {
         [saveBtn, startWeekBtn].forEach((btn) => {
+            if (!btn) return;
             btn.disabled = isLoading;
             btn.classList.toggle('loading', isLoading);
         });
@@ -73,13 +317,15 @@
                 }
             }
 
-            jsonErrMsg.style.display = 'none';
-            siteProfilesTextarea.classList.remove('json-error');
+            if (jsonErrMsg) jsonErrMsg.style.display = 'none';
+            if (siteProfilesTextarea) siteProfilesTextarea.classList.remove('json-error');
             return parsed;
         } catch (error) {
-            jsonErrMsg.textContent = `❌ JSON غير صالح: ${error.message}`;
-            jsonErrMsg.style.display = 'block';
-            siteProfilesTextarea.classList.add('json-error');
+            if (jsonErrMsg) {
+                jsonErrMsg.textContent = `❌ JSON غير صالح: ${error.message}`;
+                jsonErrMsg.style.display = 'block';
+            }
+            if (siteProfilesTextarea) siteProfilesTextarea.classList.add('json-error');
             return null;
         }
     }
@@ -99,30 +345,30 @@
         chrome.storage.sync.get(
             [
                 STORAGE_KEYS.DEFAULT_SELECTOR || 'defaultSelector',
-                STORAGE_KEYS.SITE_PROFILES || 'siteProfiles'
+                STORAGE_KEYS.SITE_PROFILES    || 'siteProfiles'
             ],
             (syncResult) => {
-                const defaultSelector = syncResult[STORAGE_KEYS.DEFAULT_SELECTOR || 'defaultSelector'];
-                const siteProfiles = syncResult[STORAGE_KEYS.SITE_PROFILES || 'siteProfiles'];
+                const defaultSelector   = syncResult[STORAGE_KEYS.DEFAULT_SELECTOR || 'defaultSelector'];
+                const siteProfiles      = syncResult[STORAGE_KEYS.SITE_PROFILES    || 'siteProfiles'];
                 const resolvedDefaultSelector = defaultSelector || SETTINGS_DEFAULTS.defaultSelector || '';
-                const resolvedProfiles = siteProfiles && Object.keys(siteProfiles).length > 0
+                const resolvedProfiles  = siteProfiles && Object.keys(siteProfiles).length > 0
                     ? siteProfiles
                     : cloneDefaultProfiles();
 
-                defaultSelectorInput.value = resolvedDefaultSelector;
+                if (defaultSelectorInput) defaultSelectorInput.value = resolvedDefaultSelector;
 
                 try {
-                    siteProfilesTextarea.value = formatProfiles(resolvedProfiles);
+                    if (siteProfilesTextarea) siteProfilesTextarea.value = formatProfiles(resolvedProfiles);
                 } catch (_) {
-                    siteProfilesTextarea.value = formatProfiles(cloneDefaultProfiles());
+                    if (siteProfilesTextarea) siteProfilesTextarea.value = formatProfiles(cloneDefaultProfiles());
                 }
 
                 if (!defaultSelector || !siteProfiles || Object.keys(siteProfiles).length === 0) {
                     chrome.storage.sync.set({
-                        [STORAGE_KEYS.DEFAULT_SELECTOR || 'defaultSelector']: resolvedDefaultSelector,
-                        [STORAGE_KEYS.DEFAULT_INTERVAL || 'defaultInterval']: AUTOCLICK_DEFAULTS.interval,
+                        [STORAGE_KEYS.DEFAULT_SELECTOR  || 'defaultSelector']:  resolvedDefaultSelector,
+                        [STORAGE_KEYS.DEFAULT_INTERVAL  || 'defaultInterval']:  AUTOCLICK_DEFAULTS.interval,
                         [STORAGE_KEYS.DEFAULT_MAX_RETRIES || 'defaultMaxRetries']: AUTOCLICK_DEFAULTS.maxRetries,
-                        [STORAGE_KEYS.SITE_PROFILES || 'siteProfiles']: resolvedProfiles
+                        [STORAGE_KEYS.SITE_PROFILES     || 'siteProfiles']:     resolvedProfiles
                     }, () => void chrome.runtime.lastError);
                 }
             }
@@ -130,9 +376,11 @@
     }
 
     function saveSettings() {
+        if (!defaultSelectorInput || !siteProfilesTextarea) return;
+
         const defaultSelector = defaultSelectorInput.value.trim();
-        const profilesRaw = siteProfilesTextarea.value.trim();
-        const parsedProfiles = validateSiteProfiles(profilesRaw);
+        const profilesRaw     = siteProfilesTextarea.value.trim();
+        const parsedProfiles  = validateSiteProfiles(profilesRaw);
 
         if (parsedProfiles === null) {
             showStatus('⚠️ يوجد خطأ في صيغة JSON — راجع الحقل أدناه', 'error');
@@ -144,55 +392,67 @@
         showStatus('💾 جاري حفظ الإعدادات...', 'info', 0);
 
         chrome.storage.sync.set({
-            [STORAGE_KEYS.DEFAULT_SELECTOR || 'defaultSelector']: defaultSelector,
-            [STORAGE_KEYS.DEFAULT_INTERVAL || 'defaultInterval']: AUTOCLICK_DEFAULTS.interval,
+            [STORAGE_KEYS.DEFAULT_SELECTOR  || 'defaultSelector']:  defaultSelector,
+            [STORAGE_KEYS.DEFAULT_INTERVAL  || 'defaultInterval']:  AUTOCLICK_DEFAULTS.interval,
             [STORAGE_KEYS.DEFAULT_MAX_RETRIES || 'defaultMaxRetries']: AUTOCLICK_DEFAULTS.maxRetries,
-            [STORAGE_KEYS.SITE_PROFILES || 'siteProfiles']: parsedProfiles
+            [STORAGE_KEYS.SITE_PROFILES     || 'siteProfiles']:     parsedProfiles
         }, () => {
             chrome.storage.local.remove(LEGACY_LOCAL_KEYS, () => void chrome.runtime.lastError);
-            chrome.storage.sync.remove(LEGACY_SYNC_KEYS, () => void chrome.runtime.lastError);
+            chrome.storage.sync.remove(LEGACY_SYNC_KEYS,  () => void chrome.runtime.lastError);
             setLoading(false);
             showStatus('✅ تم حفظ الإعدادات المحلية بنجاح', 'success');
         });
     }
 
+    // ── Settings event listeners ─────────────────────────────────────────────
     let jsonDebounceTimer = null;
-    siteProfilesTextarea.addEventListener('input', () => {
-        clearTimeout(jsonDebounceTimer);
-        jsonDebounceTimer = setTimeout(() => {
-            validateSiteProfiles(siteProfilesTextarea.value);
-        }, 600);
-    });
-
-    saveBtn.addEventListener('click', saveSettings);
-    startWeekBtn.addEventListener('click', () => {
-        setLoading(true);
-        showStatus('🚀 جاري إرسال أمر البدء للصفحة الحالية...', 'info', 0);
-        chrome.runtime.sendMessage({ type: 'START_ACTIVE_TAB' }, (resp) => {
-            setLoading(false);
-            if (chrome.runtime.lastError || !(resp && resp.success)) {
-                showStatus('❌ تعذر بدء التحضير على الصفحة الحالية', 'error');
-                return;
-            }
-            showStatus(
-                resp.alreadyStarting
-                    ? '⏳ التحضير قيد البدء بالفعل'
-                    : '🚀 تم إرسال أمر البدء للصفحة الحالية',
-                'success'
-            );
+    if (siteProfilesTextarea) {
+        siteProfilesTextarea.addEventListener('input', () => {
+            clearTimeout(jsonDebounceTimer);
+            jsonDebounceTimer = setTimeout(() => {
+                validateSiteProfiles(siteProfilesTextarea.value);
+            }, 600);
         });
-    });
+    }
 
-    defaultSelectorInput.addEventListener('keydown', (event) => {
-        if (event.key === 'Enter') {
-            saveSettings();
-        }
-    });
+    if (saveBtn) {
+        saveBtn.addEventListener('click', saveSettings);
+    }
 
-    loadSettings();
+    if (startWeekBtn) {
+        startWeekBtn.addEventListener('click', () => {
+            setLoading(true);
+            showStatus('🚀 جاري إرسال أمر البدء للصفحة الحالية...', 'info', 0);
+            chrome.runtime.sendMessage({ type: 'START_ACTIVE_TAB' }, (resp) => {
+                setLoading(false);
+                if (chrome.runtime.lastError || !(resp && resp.success)) {
+                    showStatus('❌ تعذر بدء التحضير على الصفحة الحالية', 'error');
+                    return;
+                }
+                showStatus(
+                    resp.alreadyStarting
+                        ? '⏳ التحضير قيد البدء بالفعل'
+                        : '🚀 تم إرسال أمر البدء للصفحة الحالية',
+                    'success'
+                );
+            });
+        });
+    }
 
+    if (defaultSelectorInput) {
+        defaultSelectorInput.addEventListener('keydown', (event) => {
+            if (event.key === 'Enter') saveSettings();
+        });
+    }
+
+    // ── Debug helper ─────────────────────────────────────────────────────────
     window._Moeen2Debug = () => {
         chrome.storage.local.get(null, (data) => console.log('[local]', data));
-        chrome.storage.sync.get(null, (data) => console.log('[sync]', data));
+        chrome.storage.sync.get(null,  (data) => console.log('[sync]',  data));
     };
+
+    // ── Boot ─────────────────────────────────────────────────────────────────
+    document.addEventListener('DOMContentLoaded', () => { /* already at DOMContentLoaded via defer */ });
+    initAuth();
+
 })();

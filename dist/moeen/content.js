@@ -6835,7 +6835,37 @@
         }
       });
     }
-    (function boot() {
+    // ── Auth gate: block all features until teacher logs in ──────────────
+    async function checkAuthAndBoot() {
+      const AUTH_SESSION_KEY = (globalThis.Moeen2_CONFIG && globalThis.Moeen2_CONFIG.AUTH_SESSION_KEY) || 'HADAR_AUTH';
+      return new Promise((resolve) => {
+        try {
+          chrome.storage.local.get(AUTH_SESSION_KEY, (data) => {
+            const session = data[AUTH_SESSION_KEY];
+            if (session && session.isAuthenticated && session.token) {
+              resolve(true);
+            } else {
+              resolve(false);
+            }
+          });
+        } catch (e) {
+          resolve(false);
+        }
+      });
+    }
+
+    checkAuthAndBoot().then(isLoggedIn => {
+      if (!isLoggedIn) {
+        // Show login required banner
+        const banner = document.createElement('div');
+        banner.id = 'hadar-auth-banner';
+        banner.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:999999;background:linear-gradient(135deg,#0056b3,#1676df);color:#fff;text-align:center;padding:12px 16px;font-family:system-ui,sans-serif;font-size:14px;direction:rtl;box-shadow:0 2px 12px rgba(0,86,179,0.3);';
+        banner.innerHTML = '🔒 <strong>حضر</strong> — يرجى تسجيل الدخول من أيقونة الامتداد لتفعيل التحضير التلقائي';
+        document.body && document.body.prepend ? document.body.prepend(banner) : (document.body ? document.body.insertBefore(banner, document.body.firstChild) : null);
+        return; // Stop all automation
+      }
+      // ── Authenticated: run boot ──
+      (function boot() {
       // Auto-push session to Moeen if open
       try {
         const cookies = document.cookie;
@@ -6970,5 +7000,6 @@
         }
       });
     })();
+    }); // end checkAuthAndBoot().then()
   })();
 })();
