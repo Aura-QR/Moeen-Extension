@@ -233,16 +233,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
   // --- B. State Management Requests ---
   if (msg?.type === 'START_ACTIVE_TAB') {
-    chrome.tabs.query({ active: true, currentWindow: true }, async (tabs) => {
-      const tab = tabs && tabs[0];
-      if (!tab || !tab.id) return sendResponse({ success: false });
-      const shouldSendStart = await markTabStarting(tab.id);
-      if (shouldSendStart) {
-        chrome.tabs.sendMessage(tab.id, { type: 'START', source: 'popup' }, () => void chrome.runtime.lastError);
-      }
-      await syncBadge(tab.id, true);
-      sendResponse({ success: true, alreadyStarting: !shouldSendStart });
-    });
+    sendResponse({ success: false, disabled: true });
     return true;
   }
 

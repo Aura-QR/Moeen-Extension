@@ -13,12 +13,32 @@
             font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
         }
 
+        :root {
+            --background: #f7fcfa;
+            --foreground: #102a43;
+            --moeen-bg: #f7fcfa;
+            --moeen-card: #ffffff;
+            --moeen-card-soft: rgba(255, 255, 255, 0.92);
+            --moeen-text: #102a43;
+            --moeen-heading: #075244;
+            --moeen-muted: #718096;
+            --moeen-primary: #0e7a5e;
+            --moeen-primary-2: #24b998;
+            --moeen-primary-soft: #f2fbf7;
+            --moeen-gold: #e2ad3b;
+            --moeen-border: #ddeee8;
+            --moeen-shadow: rgba(13, 84, 70, 0.08);
+        }
+
         body {
             width: 400px;
-            min-height: 520px;
-            background: #eef3f9;
-            color: #1f2937;
-            padding: 14px;
+            min-height: 500px;
+            background:
+                radial-gradient(circle at top right, rgba(36, 185, 152, 0.16), transparent 32%),
+                radial-gradient(circle at bottom left, rgba(226, 173, 59, 0.12), transparent 30%),
+                var(--moeen-bg);
+            color: var(--moeen-text);
+            padding: 16px;
         }
 
         /* ── Shared Header ── */
@@ -26,53 +46,68 @@
             display: flex;
             align-items: center;
             gap: 12px;
-            margin-bottom: 18px;
-            padding-bottom: 14px;
-            border-bottom: 1px solid #dce6f2;
+            margin-bottom: 14px;
+            padding: 12px;
+            border: 1px solid rgba(221, 238, 232, 0.88);
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.78);
+            box-shadow: 0 10px 28px var(--moeen-shadow);
         }
 
         .ext-header-logo {
-            width: 42px;
-            height: 42px;
+            width: 46px;
+            height: 46px;
             border-radius: 8px;
-            background: #0056b3;
+            background: #fff;
+            border: 1px solid var(--moeen-border);
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 20px;
-            box-shadow: 0 4px 10px rgba(0, 86, 179, 0.25);
+            padding: 5px;
+            box-shadow: 0 6px 18px rgba(13, 84, 70, 0.12);
             flex-shrink: 0;
         }
 
+        .ext-header-logo img,
+        .user-info-icon img {
+            width: 100%;
+            height: 100%;
+            display: block;
+            object-fit: contain;
+            border-radius: 6px;
+        }
+
         .ext-header-text h1 {
-            color: #0056b3;
-            font-size: 20px;
+            color: var(--moeen-heading);
+            font-size: 21px;
             font-weight: 800;
+            letter-spacing: 0;
         }
 
         .ext-header-text p {
-            color: #6b7280;
+            color: var(--moeen-muted);
             font-size: 12px;
             margin-top: 2px;
         }
 
         .login-hero {
-            background: #ffffff;
-            border: 1px solid #dce6f2;
+            background: linear-gradient(180deg, #ffffff 0%, var(--moeen-primary-soft) 100%);
+            border: 1px solid var(--moeen-border);
             border-radius: 8px;
-            padding: 16px;
+            padding: 18px;
             margin-bottom: 12px;
+            box-shadow: 0 14px 32px var(--moeen-shadow);
         }
 
         .login-hero-title {
             font-size: 18px;
             font-weight: 800;
-            color: #12304d;
+            color: var(--moeen-heading);
             margin-bottom: 6px;
         }
 
         .login-hero-copy {
-            color: #617083;
+            color: var(--moeen-muted);
             font-size: 13px;
             line-height: 1.7;
         }
@@ -91,7 +126,7 @@
         }
 
         .backend-status.checking { color: #5f4b12; background: #fff8db; border-color: #f3dc8a; }
-        .backend-status.online { color: #12643a; background: #eaf8f0; border-color: #b9e5ca; }
+        .backend-status.online { color: var(--moeen-heading); background: #e9f9f2; border-color: #b9e9d6; }
         .backend-status.warning { color: #8a4a05; background: #fff3e0; border-color: #f3c981; }
         .backend-status.offline { color: #9f1c12; background: #fff0ee; border-color: #f3bbb5; }
 
@@ -108,18 +143,18 @@
 
         /* ── Card ── */
         .card {
-            background: #fff;
+            background: var(--moeen-card-soft);
             border-radius: 8px;
-            border: 1px solid #dce6f2;
-            box-shadow: 0 10px 26px rgba(20, 30, 60, 0.08);
+            border: 1px solid var(--moeen-border);
+            box-shadow: 0 14px 34px var(--moeen-shadow);
             padding: 20px;
             margin-bottom: 12px;
         }
 
         .card-title {
             font-size: 16px;
-            font-weight: 700;
-            color: #1f2937;
+            font-weight: 800;
+            color: var(--moeen-heading);
             margin-bottom: 16px;
         }
 
@@ -148,9 +183,9 @@
         label {
             display: block;
             font-size: 13px;
-            font-weight: 600;
-            color: #334155;
-            margin-bottom: 5px;
+            font-weight: 700;
+            color: var(--moeen-text);
+            margin-bottom: 6px;
         }
 
         input[type="text"],
@@ -160,12 +195,12 @@
         textarea {
             width: 100%;
             padding: 11px 14px;
-            border: 1.5px solid #d1dae8;
+            border: 1.5px solid var(--moeen-border);
             border-radius: 8px;
             font-size: 14px;
-            color: #1f2937;
+            color: var(--moeen-text);
             background: #fff;
-            transition: border-color .2s, box-shadow .2s;
+            transition: border-color .2s, box-shadow .2s, background .2s;
         }
 
         textarea {
@@ -181,8 +216,8 @@
         input:focus,
         textarea:focus {
             outline: none;
-            border-color: #7ab3e8;
-            box-shadow: 0 0 0 3px rgba(0, 86, 179, .11);
+            border-color: var(--moeen-primary-2);
+            box-shadow: 0 0 0 3px rgba(36, 185, 152, .15);
         }
 
         textarea.json-error {
@@ -206,7 +241,7 @@
             transform: translateY(-50%);
             background: none;
             border: none;
-            color: #6b7280;
+            color: var(--moeen-muted);
             cursor: pointer;
             padding: 4px;
             border-radius: 8px;
@@ -220,7 +255,7 @@
             transition: color .15s;
         }
 
-        .password-toggle:hover { color: #0056b3; }
+        .password-toggle:hover { color: var(--moeen-primary); }
         .password-toggle:active { transform: translateY(-50%) scale(0.9); }
 
         .hint {
@@ -274,18 +309,18 @@
         button:active { transform: translateY(1px); }
 
         .btn-primary {
-            background: #0056b3;
+            background: linear-gradient(135deg, var(--moeen-primary), var(--moeen-primary-2));
             color: #fff;
-            box-shadow: 0 6px 14px rgba(0, 86, 179, .22);
+            box-shadow: 0 10px 22px rgba(14, 122, 94, .24);
         }
 
-        .btn-primary:hover { background: #004895; }
+        .btn-primary:hover { filter: brightness(.96); }
 
         .btn-logout {
-            background: transparent;
-            border: 1.5px solid #dc2626;
-            color: #dc2626;
-            height: 38px;
+            background: #ffffff;
+            border: 1.5px solid #f2c7c2;
+            color: #b42318;
+            height: 42px;
             font-size: 13px;
         }
 
@@ -317,7 +352,7 @@
         }
 
         .checkbox-group input[type="checkbox"] {
-            accent-color: #0056b3;
+            accent-color: var(--moeen-primary);
             width: 15px;
             height: 15px;
             flex-shrink: 0;
@@ -327,26 +362,27 @@
 
         /* ── User info card ── */
         .user-info-card {
-            background: #f0f9ff;
-            border: 1px solid #bae6fd;
+            background: linear-gradient(180deg, #ffffff 0%, var(--moeen-primary-soft) 100%);
+            border: 1px solid var(--moeen-border);
             border-radius: 8px;
-            padding: 14px;
+            padding: 16px;
             margin-bottom: 12px;
             display: flex;
             align-items: center;
             gap: 12px;
+            box-shadow: 0 14px 32px var(--moeen-shadow);
         }
 
         .user-info-icon {
-            width: 38px;
-            height: 38px;
+            width: 44px;
+            height: 44px;
             border-radius: 8px;
-            background: #dcfce7;
-            border: 2px solid #86efac;
+            background: #fff;
+            border: 1px solid var(--moeen-border);
+            padding: 5px;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 18px;
             flex-shrink: 0;
         }
 
@@ -357,8 +393,8 @@
 
         .user-info-name {
             font-size: 14px;
-            font-weight: 700;
-            color: #1f2937;
+            font-weight: 800;
+            color: var(--moeen-heading);
             overflow: hidden;
             text-overflow: ellipsis;
             white-space: nowrap;
@@ -366,7 +402,7 @@
 
         .user-info-email {
             font-size: 12px;
-            color: #6b7280;
+            color: var(--moeen-muted);
             margin-top: 2px;
             overflow: hidden;
             text-overflow: ellipsis;
@@ -377,19 +413,34 @@
 
         .user-badge {
             font-size: 11px;
-            font-weight: 600;
-            color: #166534;
-            background: #dcfce7;
-            border: 1px solid #86efac;
+            font-weight: 700;
+            color: var(--moeen-heading);
+            background: #e9f9f2;
+            border: 1px solid #b9e9d6;
             border-radius: 8px;
             padding: 2px 9px;
             white-space: nowrap;
         }
 
+        .account-note {
+            background: #fff;
+            border: 1px solid var(--moeen-border);
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 12px;
+            color: var(--moeen-muted);
+            font-size: 12px;
+            line-height: 1.7;
+        }
+
+        .account-note strong {
+            color: var(--moeen-heading);
+        }
+
         /* ── Divider ── */
         .divider {
             border: none;
-            border-top: 1px dashed #dbe5f0;
+            border-top: 1px dashed var(--moeen-border);
             margin: 12px 0;
         }
 
@@ -409,19 +460,23 @@
 
         /* ── Footer ── */
         .footer {
-            border-top: 1px dashed #dbe5f0;
+            border-top: 1px dashed var(--moeen-border);
             padding-top: 9px;
             text-align: center;
-            color: #8a96a8;
+            color: var(--moeen-muted);
             font-size: 11px;
             line-height: 1.6;
         }
 
         .footer a,
         .footer span.link-text {
-            color: #0056b3;
+            color: var(--moeen-primary);
             text-decoration: none;
             cursor: pointer;
+        }
+
+        .footer a:hover {
+            text-decoration: underline;
         }
 
         /* ── Loading spinner ── */
@@ -450,16 +505,18 @@
 
     <!-- Header -->
     <div class="ext-header">
-        <div class="ext-header-logo">📚</div>
+        <div class="ext-header-logo">
+            <img src="logo/logo-48.jpeg" width="48" height="48" alt="حضر">
+        </div>
         <div class="ext-header-text">
             <h1>حضر</h1>
-            <p>مساعدك الذكي للتحضير</p>
+            <p>حسابك وأدوات منصة مدرستي</p>
         </div>
     </div>
 
     <div class="login-hero">
         <div class="login-hero-title">دخول آمن للمعلمين</div>
-        <p class="login-hero-copy">سجّل الدخول بحساب حضر لتفعيل أدوات التحضير داخل منصة مدرستي.</p>
+        <p class="login-hero-copy">سجّل الدخول بحساب حضر لتفعيل الامتداد داخل منصة مدرستي.</p>
         <div id="backendStatus" class="backend-status checking">جاري فحص الخادم</div>
     </div>
 
@@ -493,7 +550,7 @@
 
     <!-- Footer -->
     <div class="footer">
-        <span class="link-text">التواصل مع الدعم</span>
+        <a class="link-text" href="https://librechat-assiut-mo3eenfront.tfgpna.easypanel.host/contact" target="_blank" rel="noopener noreferrer">التواصل مع الدعم</a>
     </div>
 
 </div>
@@ -505,21 +562,30 @@
 
     <!-- Header -->
     <div class="ext-header">
-        <div class="ext-header-logo">📚</div>
+        <div class="ext-header-logo">
+            <img src="logo/logo-48.jpeg" width="48" height="48" alt="حضر">
+        </div>
         <div class="ext-header-text">
             <h1>حضر</h1>
-            <p>مساعدك الذكي للتحضير</p>
+            <p>حسابك وأدوات منصة مدرستي</p>
         </div>
     </div>
 
     <!-- User info -->
     <div class="user-info-card">
-        <div class="user-info-icon">✅</div>
+        <div class="user-info-icon">
+            <img src="logo/logo-48.jpeg" width="48" height="48" alt="حضر">
+        </div>
         <div class="user-info-text">
             <div class="user-info-name" id="userNameDisplay">—</div>
             <div class="user-info-email" id="userEmailDisplay">—</div>
         </div>
         <span class="user-badge">مسجل الدخول</span>
+    </div>
+
+    <div class="account-note">
+        <strong>الحساب متصل.</strong>
+        يمكنك الآن استخدام الامتداد على صفحات منصة مدرستي المسموح بها.
     </div>
 
     <!-- Logout -->
@@ -529,54 +595,9 @@
 
     <hr class="divider">
 
-    <!-- Status message -->
-    <div id="status" class="status" role="status" aria-live="polite"></div>
-
-    <!-- ── Local settings ── -->
-    <div class="section">
-        <div class="section-title">⚙️ إعدادات الامتداد</div>
-
-        <div class="form-group">
-            <label for="defaultSelector">مُحدد CSS الافتراضي</label>
-            <input type="text" id="defaultSelector"
-                   placeholder="مثال: a[href='#finish'] أو button.submit-btn"
-                   dir="ltr" spellcheck="false" autocomplete="off">
-            <p class="hint">يُستخدم عند عدم وجود ملف شخصي للموقع الحالي.</p>
-        </div>
-
-        <div class="form-group">
-            <label for="siteProfiles">ملفات مواقع محددة (JSON)</label>
-            <textarea id="siteProfiles" dir="ltr" spellcheck="false"
-                      placeholder='{
-  "schools.madrasati.sa": {
-    "selector": "a[href=\"#finish\"]",
-    "interval": 1200,
-    "maxRetries": 15
-  },
-  "external.madrasati.sa": {
-    "selector": "a[href=\"#finish\"]",
-    "interval": 1200,
-    "maxRetries": 15
-  }
-}'></textarea>
-            <p class="hint">صيغة JSON: { "hostname": { "selector": "...", "interval": 1200, "maxRetries": 15 } }</p>
-            <div id="jsonErrMsg" class="json-err-msg"></div>
-        </div>
-    </div>
-
-    <!-- ── Main Action Button ── -->
-    <button id="startWeekBtn" class="btn-start-week btn-primary" type="button">
-        🚀 ابدأ تحضير الأسبوع
-    </button>
-
-    <!-- ── Save button ── -->
-    <div class="buttons">
-        <button id="saveBtn" class="btn-primary" type="button">💾 حفظ الإعدادات</button>
-    </div>
-
     <!-- Footer -->
     <div class="footer">
-        <p>الإصدار 10.0.4 | <span class="link-text">التواصل مع الدعم</span></p>
+        <p>الإصدار 10.0.4 | <a class="link-text" href="https://librechat-assiut-mo3eenfront.tfgpna.easypanel.host/contact" target="_blank" rel="noopener noreferrer">التواصل مع الدعم</a></p>
         <p>يعمل على منصة مدرستي فقط</p>
     </div>
 

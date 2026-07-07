@@ -40,7 +40,6 @@
     const siteProfilesTextarea  = document.getElementById('siteProfiles');
     const jsonErrMsg            = document.getElementById('jsonErrMsg');
     const saveBtn               = document.getElementById('saveBtn');
-    const startWeekBtn          = document.getElementById('startWeekBtn');
     const statusEl              = document.getElementById('status');
 
     // Auth / login elements
@@ -341,7 +340,7 @@
     }
 
     function setLoading(isLoading) {
-        [saveBtn, startWeekBtn].forEach((btn) => {
+        [saveBtn].forEach((btn) => {
             if (!btn) return;
             btn.disabled = isLoading;
             btn.classList.toggle('loading', isLoading);
@@ -470,26 +469,6 @@
 
     if (saveBtn) {
         saveBtn.addEventListener('click', saveSettings);
-    }
-
-    if (startWeekBtn) {
-        startWeekBtn.addEventListener('click', () => {
-            setLoading(true);
-            showStatus('🚀 جاري إرسال أمر البدء للصفحة الحالية...', 'info', 0);
-            chrome.runtime.sendMessage({ type: 'START_ACTIVE_TAB' }, (resp) => {
-                setLoading(false);
-                if (chrome.runtime.lastError || !(resp && resp.success)) {
-                    showStatus('❌ تعذر بدء التحضير على الصفحة الحالية', 'error');
-                    return;
-                }
-                showStatus(
-                    resp.alreadyStarting
-                        ? '⏳ التحضير قيد البدء بالفعل'
-                        : '🚀 تم إرسال أمر البدء للصفحة الحالية',
-                    'success'
-                );
-            });
-        });
     }
 
     if (defaultSelectorInput) {
