@@ -15,7 +15,8 @@
 
         body {
             width: 400px;
-            background: #f3f6fb;
+            min-height: 520px;
+            background: #eef3f9;
             color: #1f2937;
             padding: 14px;
         }
@@ -27,14 +28,14 @@
             gap: 12px;
             margin-bottom: 18px;
             padding-bottom: 14px;
-            border-bottom: 1px solid #eef2f8;
+            border-bottom: 1px solid #dce6f2;
         }
 
         .ext-header-logo {
             width: 42px;
             height: 42px;
-            border-radius: 50%;
-            background: linear-gradient(145deg, #0056b3, #1676df);
+            border-radius: 8px;
+            background: #0056b3;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -55,6 +56,45 @@
             margin-top: 2px;
         }
 
+        .login-hero {
+            background: #ffffff;
+            border: 1px solid #dce6f2;
+            border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 12px;
+        }
+
+        .login-hero-title {
+            font-size: 18px;
+            font-weight: 800;
+            color: #12304d;
+            margin-bottom: 6px;
+        }
+
+        .login-hero-copy {
+            color: #617083;
+            font-size: 13px;
+            line-height: 1.7;
+        }
+
+        .backend-status {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 26px;
+            margin-top: 12px;
+            padding: 4px 10px;
+            border-radius: 8px;
+            font-size: 12px;
+            font-weight: 700;
+            border: 1px solid transparent;
+        }
+
+        .backend-status.checking { color: #5f4b12; background: #fff8db; border-color: #f3dc8a; }
+        .backend-status.online { color: #12643a; background: #eaf8f0; border-color: #b9e5ca; }
+        .backend-status.warning { color: #8a4a05; background: #fff3e0; border-color: #f3c981; }
+        .backend-status.offline { color: #9f1c12; background: #fff0ee; border-color: #f3bbb5; }
+
         /* ── Screen transitions ── */
         #screen-login,
         #screen-dashboard {
@@ -69,9 +109,9 @@
         /* ── Card ── */
         .card {
             background: #fff;
-            border-radius: 16px;
-            border: 1px solid #e4eaf4;
-            box-shadow: 0 10px 28px rgba(20, 30, 60, 0.09);
+            border-radius: 8px;
+            border: 1px solid #dce6f2;
+            box-shadow: 0 10px 26px rgba(20, 30, 60, 0.08);
             padding: 20px;
             margin-bottom: 12px;
         }
@@ -85,8 +125,8 @@
 
         /* ── Section card ── */
         .section {
-            border: 1px solid #eef2f8;
-            border-radius: 12px;
+            border: 1px solid #dce6f2;
+            border-radius: 8px;
             padding: 12px;
             margin-bottom: 12px;
             background: #fcfdff;
@@ -121,7 +161,7 @@
             width: 100%;
             padding: 11px 14px;
             border: 1.5px solid #d1dae8;
-            border-radius: 10px;
+            border-radius: 8px;
             font-size: 14px;
             color: #1f2937;
             background: #fff;
@@ -169,7 +209,7 @@
             color: #6b7280;
             cursor: pointer;
             padding: 4px;
-            border-radius: 4px;
+            border-radius: 8px;
             height: auto;
             width: auto;
             font-size: 16px;
@@ -195,7 +235,7 @@
             font-size: 11px;
             color: #c0392b;
             background: #fdecea;
-            border-radius: 6px;
+            border-radius: 8px;
             padding: 5px 9px;
             margin-top: 4px;
         }
@@ -223,7 +263,7 @@
 
         button {
             border: none;
-            border-radius: 10px;
+            border-radius: 8px;
             height: 44px;
             font-size: 14px;
             font-weight: 700;
@@ -234,12 +274,12 @@
         button:active { transform: translateY(1px); }
 
         .btn-primary {
-            background: linear-gradient(145deg, #0056b3, #1676df);
+            background: #0056b3;
             color: #fff;
             box-shadow: 0 6px 14px rgba(0, 86, 179, .22);
         }
 
-        .btn-primary:hover { opacity: .9; }
+        .btn-primary:hover { background: #004895; }
 
         .btn-logout {
             background: transparent;
@@ -255,7 +295,7 @@
 
         /* ── Start week button ── */
         .btn-start-week {
-            background: linear-gradient(145deg, #0056b3, #1676df);
+            background: #0056b3;
             color: #fff;
             box-shadow: 0 6px 14px rgba(0, 86, 179, .22);
             width: 100%;
@@ -289,7 +329,7 @@
         .user-info-card {
             background: #f0f9ff;
             border: 1px solid #bae6fd;
-            border-radius: 12px;
+            border-radius: 8px;
             padding: 14px;
             margin-bottom: 12px;
             display: flex;
@@ -300,7 +340,7 @@
         .user-info-icon {
             width: 38px;
             height: 38px;
-            border-radius: 50%;
+            border-radius: 8px;
             background: #dcfce7;
             border: 2px solid #86efac;
             display: flex;
@@ -341,7 +381,7 @@
             color: #166534;
             background: #dcfce7;
             border: 1px solid #86efac;
-            border-radius: 20px;
+            border-radius: 8px;
             padding: 2px 9px;
             white-space: nowrap;
         }
@@ -357,7 +397,7 @@
         .status {
             display: none;
             padding: 9px 12px;
-            border-radius: 9px;
+            border-radius: 8px;
             font-size: 13px;
             line-height: 1.4;
             margin-bottom: 10px;
@@ -415,6 +455,12 @@
             <h1>حضر</h1>
             <p>مساعدك الذكي للتحضير</p>
         </div>
+    </div>
+
+    <div class="login-hero">
+        <div class="login-hero-title">دخول آمن للمعلمين</div>
+        <p class="login-hero-copy">سجّل الدخول بحساب حضر لتفعيل أدوات التحضير داخل منصة مدرستي.</p>
+        <div id="backendStatus" class="backend-status checking">جاري فحص الخادم</div>
     </div>
 
     <!-- Login Card -->
@@ -530,7 +576,7 @@
 
     <!-- Footer -->
     <div class="footer">
-        <p>الإصدار 10.0.3 | <span class="link-text">التواصل مع الدعم</span></p>
+        <p>الإصدار 10.0.4 | <span class="link-text">التواصل مع الدعم</span></p>
         <p>يعمل على منصة مدرستي فقط</p>
     </div>
 

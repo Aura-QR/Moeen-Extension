@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "حضر",
   "description": "تبسيط تعديل واعداد الحصص للمعلم",
-  "version": "10.0.3",
+  "version": "10.0.4",
 
   "icons": {
     "16": "logo/logo-16.jpeg",
@@ -34,6 +34,7 @@
     "https://n8n.abdelati88.shop/*",
     "https://n8n.qraura.shop/*",
     "https://k.tahdiri.com/*",
+    "https://librechat-assiut-moeen-backend.tfgpna.easypanel.host/*",
     "http://localhost:3000/*",
     "http://localhost:3001/*",
     "http://127.0.0.1:3000/*",

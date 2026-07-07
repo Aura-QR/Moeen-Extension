@@ -28,6 +28,8 @@
 
     const AUTH_SESSION_KEY = CONFIG.AUTH_SESSION_KEY || 'HADAR_AUTH';
     const API_BASE_URL = CONFIG.API_BASE_URL || 'https://librechat-assiut-moeen-backend.tfgpna.easypanel.host/api';
+    const API_ORIGIN = CONFIG.API_ORIGIN || API_BASE_URL.replace(/\/api\/?$/, '');
+    const REQUEST_TIMEOUT_MS = 15000;
 
     const LEGACY_LOCAL_KEYS = ['token', 'quota'];
     const LEGACY_SYNC_KEYS = ['apiHost', 'offlineMode'];
@@ -47,6 +49,7 @@
     const loginErrorEl     = document.getElementById('loginError');
     const loginBtn         = document.getElementById('loginBtn');
     const passwordToggle   = document.getElementById('passwordToggle');
+    const backendStatusEl  = document.getElementById('backendStatus');
     const logoutBtn        = document.getElementById('logoutBtn');
 
     // User info display
@@ -57,6 +60,36 @@
     function showScreen(name) {
         document.getElementById('screen-login').style.display     = name === 'login'     ? 'block' : 'none';
         document.getElementById('screen-dashboard').style.display = name === 'dashboard' ? 'block' : 'none';
+    }
+
+    async function apiFetch(path, options = {}) {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+        try {
+            return await fetch(`${API_BASE_URL}${path}`, {
+                ...options,
+                signal: controller.signal,
+                headers: {
+                    'Accept': 'application/json',
+                    ...(options.headers || {})
+                }
+            });
+        } finally {
+            clearTimeout(timer);
+        }
+    }
+
+    function normalizeAuthResponse(data) {
+        const token = data && (data.token || data.accessToken || data.access_token);
+        const tokenType = (data && (data.tokenType || data.token_type)) || 'Bearer';
+        const user = data && (data.user || data.data?.user || data.profile);
+        return { token, tokenType, user };
+    }
+
+    function setBackendStatus(state, text) {
+        if (!backendStatusEl) return;
+        backendStatusEl.className = `backend-status ${state}`;
+        backendStatusEl.textContent = text;
     }
 
     // ── Auth storage helpers ─────────────────────────────────────────────────
@@ -86,7 +119,7 @@
     function setLoginLoading(isLoading) {
         loginBtn.disabled = isLoading;
         loginBtn.classList.toggle('loading', isLoading);
-        loginBtn.textContent = isLoading ? '' : 'تسجيل الدخول';
+        loginBtn.textContent = isLoading ? 'جاري التحقق' : 'تسجيل الدخول';
     }
 
     // ── Populate user display ────────────────────────────────────────────────
@@ -111,7 +144,7 @@
         setLoginLoading(true);
 
         try {
-            const resp = await fetch(`${API_BASE_URL}/auth/login`, {
+            const resp = await apiFetch('/auth/login', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ email, password })
@@ -126,20 +159,21 @@
                 return;
             }
 
-            if (!data.token || !data.user) {
+            const auth = normalizeAuthResponse(data);
+            if (!auth.token || !auth.user) {
                 showLoginError('❌ استجابة غير متوقعة من الخادم. حاول مجدداً.');
                 return;
             }
 
             const session = {
                 isAuthenticated: true,
-                token: data.token,
-                tokenType: 'Bearer',
+                token: auth.token,
+                tokenType: auth.tokenType,
                 user: {
-                    id:    data.user.id,
-                    name:  data.user.name,
-                    email: data.user.email,
-                    role:  data.user.role
+                    id:    auth.user.id,
+                    name:  auth.user.name || auth.user.fullName || auth.user.email,
+                    email: auth.user.email,
+                    role:  auth.user.role
                 },
                 sessionCreatedAt: Date.now()
             };
@@ -152,7 +186,10 @@
             loadSettings();
 
         } catch (err) {
-            showLoginError('❌ تعذر الاتصال بالخادم. تحقق من اتصالك بالإنترنت.');
+            const message = err && err.name === 'AbortError'
+                ? '❌ انتهت مهلة الاتصال بالخادم. حاول مرة أخرى.'
+                : '❌ تعذر الاتصال بالخادم. تحقق من اتصالك بالإنترنت.';
+            showLoginError(message);
             console.error('[Moeen popup] Login error:', err);
         } finally {
             setLoginLoading(false);
@@ -165,7 +202,7 @@
         try {
             const session = await getAuthSession();
             if (session && session.token) {
-                fetch(`${API_BASE_URL}/auth/logout`, {
+                apiFetch('/auth/logout', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -182,7 +219,7 @@
     // ── Token validation ─────────────────────────────────────────────────────
     async function validateToken(session) {
         try {
-            const resp = await fetch(`${API_BASE_URL}/auth/me`, {
+            const resp = await apiFetch('/auth/me', {
                 method: 'GET',
                 headers: {
                     'Authorization': `${session.tokenType || 'Bearer'} ${session.token}`
@@ -196,15 +233,16 @@
             if (resp.ok) {
                 try {
                     const data = await resp.json();
-                    if (data && (data.name || data.email)) {
+                    const user = data && (data.user || data.data?.user || data);
+                    if (user && (user.name || user.fullName || user.email)) {
                         // Update stored user info if server returns fresh data
                         const updated = {
                             ...session,
                             user: {
-                                id:    data.id    || session.user.id,
-                                name:  data.name  || session.user.name,
-                                email: data.email || session.user.email,
-                                role:  data.role  || session.user.role
+                                id:    user.id    || session.user.id,
+                                name:  user.name  || user.fullName || session.user.name,
+                                email: user.email || session.user.email,
+                                role:  user.role  || session.user.role
                             }
                         };
                         await saveAuthSession(updated);
@@ -221,6 +259,7 @@
 
     // ── Startup auth check ───────────────────────────────────────────────────
     async function initAuth() {
+        checkBackendHealth();
         const session = await getAuthSession();
 
         if (session && session.isAuthenticated && session.token) {
@@ -235,6 +274,20 @@
         }
 
         showScreen('login');
+    }
+
+    async function checkBackendHealth() {
+        setBackendStatus('checking', 'جاري فحص الخادم');
+        try {
+            const resp = await fetch(API_ORIGIN, { method: 'GET', cache: 'no-store' });
+            if (resp.ok) {
+                setBackendStatus('online', 'الخادم متصل');
+            } else {
+                setBackendStatus('warning', 'الخادم يستجيب بصعوبة');
+            }
+        } catch (_) {
+            setBackendStatus('offline', 'الخادم غير متاح');
+        }
     }
 
     // ── Password toggle ──────────────────────────────────────────────────────
