@@ -4,8 +4,8 @@
   globalScope.Moeen2_CONFIG = Object.freeze({
     APP_NAME: 'حضر',
     VERSION: '10.0.4',
-    API_BASE_URL: 'https://librechat-assiut-moeen-backend.tfgpna.easypanel.host/api',
-    API_ORIGIN: 'https://librechat-assiut-moeen-backend.tfgpna.easypanel.host',
+    API_BASE_URL: 'https://api.haderedu.com/api',
+    API_ORIGIN: 'https://api.haderedu.com',
     AUTH_SESSION_KEY: 'HADAR_AUTH',
     STORAGE_KEYS: Object.freeze({
       AUTOMATION_STATE: 'automationState',

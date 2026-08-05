@@ -27,7 +27,7 @@
     };
 
     const AUTH_SESSION_KEY = CONFIG.AUTH_SESSION_KEY || 'HADAR_AUTH';
-    const API_BASE_URL = CONFIG.API_BASE_URL || 'https://librechat-assiut-moeen-backend.tfgpna.easypanel.host/api';
+    const API_BASE_URL = CONFIG.API_BASE_URL || 'https://api.haderedu.com/api';
     const API_ORIGIN = CONFIG.API_ORIGIN || API_BASE_URL.replace(/\/api\/?$/, '');
     const REQUEST_TIMEOUT_MS = 15000;
 
