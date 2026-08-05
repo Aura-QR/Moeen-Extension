@@ -126,6 +126,27 @@
         if (!session || !session.user) return;
         if (userNameDisplay)  userNameDisplay.textContent  = session.user.name  || '—';
         if (userEmailDisplay) userEmailDisplay.textContent = session.user.email || '—';
+        fetchAndDisplayQuota(session);
+    }
+
+    async function fetchAndDisplayQuota(session) {
+        if (!session || !session.token) return;
+        try {
+            const resp = await apiFetch('/subscription/current', {
+                headers: {
+                    'Authorization': `${session.tokenType || 'Bearer'} ${session.token}`
+                }
+            });
+            if (resp.ok) {
+                const data = await resp.json();
+                const quotaEl = document.getElementById('quotaDisplay');
+                if (quotaEl && data.can_prepare_lesson !== undefined) {
+                    quotaEl.textContent = data.can_prepare_lesson
+                        ? '✅ رصيد التحضير المتاح لك فعال.'
+                        : '⚠️ تم استنفاد الحد اليومي للتحضير.';
+                }
+            }
+        } catch (_) { /* non-fatal */ }
     }
 
     // ── Login handler ────────────────────────────────────────────────────────

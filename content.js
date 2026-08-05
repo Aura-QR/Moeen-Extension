@@ -56,6 +56,9 @@
     var SAVE_SUBMITTED_AT_KEY = "automationSaveSubmittedAt";
     var AI_LESSON_DATA_KEY = "aiLessonData";
     var AUTOMATION_MODE_KEY = "automationMode";
+    var AUTH_SESSION_KEY = CONFIG.AUTH_SESSION_KEY || "HADAR_AUTH";
+    var _lastPreparedPayload = null;
+    var _lastLessonContext = null;
     var N8N_AI_WEBHOOK_URL = "https://n8n.qraura.shop/webhook/mo3een-ai-generator2";
     var N8N_AI_API_KEY = "sk-mo3een-super-secret-2026";
     var AI_WEBHOOK_TIMEOUT_MS = 25000;
@@ -210,6 +213,69 @@
         status,
         ...extra || {}
       });
+    }
+
+    function normalizeForBackendLog(aiDataOrGoalsData) {
+      if (!aiDataOrGoalsData) return null;
+      var d = aiDataOrGoalsData;
+      return {
+        preparation_text: d.LectureClassPreparationText || d.prep || "",
+        goals: d.goals || "",
+        closure: d.LectureClassCloseText || d.closure || "",
+        vocabulary: d.LessonVocabulary || d.vocabulary || "",
+        thinking_skills: d.ThinkingSkills || d.thinkingSkills || "",
+        teacher_note: d.TeacherNote || d.teacherNote || "",
+        strategies: Array.isArray(d.strategies) ? d.strategies : [],
+        tools: Array.isArray(d.tools) ? d.tools : [],
+        homework: d.homework || "",
+        enrichment: d.enrichment || "",
+        goal_ids: Array.isArray(d.goalIds) ? d.goalIds : [],
+        ein_link: d.einLink || ""
+      };
+    }
+
+    async function logPreparationToBackend(status, errorMessage) {
+      try {
+        var authData = await getLocal([AUTH_SESSION_KEY]);
+        var session = authData[AUTH_SESSION_KEY];
+        if (!session || !session.token) {
+          log("logPreparationToBackend: no auth token, skipping");
+          return;
+        }
+
+        var context = _lastLessonContext || {};
+        var searchParams = new URLSearchParams(window.location.search);
+        var payload = {
+          status: status === "DONE" ? "done" : "error",
+          source: "extension",
+          lesson_title: context.lessonTitle || null,
+          grade: context.grade || null,
+          subject: context.subject || null,
+          lesson_madrasati_id: searchParams.get("LessonId") || searchParams.get("lesson_madrasati_id") || null,
+          chapter_id: searchParams.get("ChapterId") || searchParams.get("chapter_id") || null,
+          classroom_id: searchParams.get("ClassRoomId") || searchParams.get("classroom_id") || null,
+          school_madrasati_id: searchParams.get("SchoolId") || searchParams.get("schoolId") || searchParams.get("real_school_id") || null,
+          time_table_id: searchParams.get("TimeTableId") || searchParams.get("time_table_id") || null,
+          prepared_payload: normalizeForBackendLog(_lastPreparedPayload),
+          error_message: status !== "DONE" ? (errorMessage || null) : null,
+          automation_mode: (typeof AutomationController !== "undefined" && AutomationController.mode) || "auto"
+        };
+
+        var apiBase = (CONFIG.API_BASE_URL || "https://librechat-assiut-moeen-backend.tfgpna.easypanel.host/api").replace(/\/+$/, "");
+        await fetch(apiBase + "/lesson-preparations/log", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "Authorization": (session.tokenType || "Bearer") + " " + session.token
+          },
+          body: JSON.stringify(payload)
+        });
+
+        log("logPreparationToBackend: sent successfully to Hader backend");
+      } catch (err) {
+        console.warn("[حضر] logPreparationToBackend error (non-fatal):", err);
+      }
     }
 
     // ── Headless API: local data fetchers (Background memory cache) ─────────────
@@ -5648,6 +5714,7 @@
           chrome.storage.local.get([AI_LESSON_DATA_KEY], resolve);
         });
         const aiData = storageResult[AI_LESSON_DATA_KEY] || null;
+        _lastPreparedPayload = aiData;
 
         if (aiData) {
           console.log('[\u062A\u062D\u0636\u064A\u0631\u064A AI] Step 2 \u2014 AI data found:', JSON.stringify(aiData).substring(0, 200));
@@ -5889,6 +5956,7 @@
 
           // 1. Scrape lesson context
           var context = scrapeLessonContext();
+          _lastLessonContext = context;
           log("startAI: scraped context", context);
           console.log('[مُعين-2] Context scraped:', JSON.stringify(context));
 
@@ -6021,6 +6089,9 @@
           status === "DONE" ? "success" : "error"
         );
         await sendAutomationStatus(status, { state: finalState, message });
+        await logPreparationToBackend(status, message);
+        _lastPreparedPayload = null;
+        _lastLessonContext = null;
         removeControlPanel(status === "DONE" ? 2500 : 5e3);
       },
       async run() {
