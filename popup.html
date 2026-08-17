@@ -433,6 +433,58 @@
             line-height: 1.7;
         }
 
+        /* ── Trial Status Card ── */
+        .trial-card {
+            border-radius: 10px;
+            padding: 12px 14px;
+            margin-bottom: 12px;
+            font-size: 12px;
+            line-height: 1.7;
+        }
+        .trial-card.active {
+            background: linear-gradient(135deg, #eaf9f2 0%, #f5fdf9 100%);
+            border: 1px solid #a7e6c6;
+        }
+        .trial-card.last-day {
+            background: linear-gradient(135deg, #fef9ec 0%, #fffdf5 100%);
+            border: 1px solid #f0d38a;
+        }
+        .trial-card.expired {
+            background: linear-gradient(135deg, #fef2f2 0%, #fff8f8 100%);
+            border: 1px solid #fca5a5;
+        }
+        .trial-card.subscribed {
+            background: linear-gradient(135deg, #eaf9f2 0%, #f5fdf9 100%);
+            border: 1px solid #a7e6c6;
+        }
+        .trial-title {
+            font-weight: 800;
+            font-size: 13px;
+            margin-bottom: 3px;
+        }
+        .trial-card.active .trial-title { color: #065f46; }
+        .trial-card.last-day .trial-title { color: #92400e; }
+        .trial-card.expired .trial-title { color: #991b1b; }
+        .trial-card.subscribed .trial-title { color: #065f46; }
+        .trial-sub { color: #6b7280; font-size: 11px; }
+        .trial-upgrade-btn {
+            display: inline-block;
+            margin-top: 8px;
+            background: #0e7a5e;
+            color: #fff;
+            border: none;
+            border-radius: 7px;
+            padding: 6px 14px;
+            font-size: 12px;
+            font-weight: 700;
+            cursor: pointer;
+            text-decoration: none;
+            transition: background 0.18s;
+        }
+        .trial-upgrade-btn:hover { background: #065f46; }
+        .trial-upgrade-btn.urgent { background: #b91c1c; }
+        .trial-upgrade-btn.urgent:hover { background: #991b1b; }
+
         .account-note strong {
             color: var(--moeen-heading);
         }
@@ -665,7 +717,7 @@
 
     <!-- Footer -->
     <div class="footer">
-        <a class="link-text" href="https://librechat-assiut-mo3eenfront.tfgpna.easypanel.host/contact" target="_blank" rel="noopener noreferrer">التواصل مع الدعم</a>
+        <a class="link-text" href="https://haderedu.com/contact" target="_blank" rel="noopener noreferrer">التواصل مع الدعم</a>
     </div>
 
 </div>
@@ -700,7 +752,14 @@
 
     <div class="account-note">
         <strong>الحساب متصل.</strong>
-        <div id="quotaDisplay" style="margin-top: 4px; font-weight: 500;">يمكنك الآن استخدام الامتداد على صفحات منصة مدرستي المسموح بها.</div>
+        <!-- Trial / Subscription status rendered by popup.js -->
+        <div id="trialStatusCard" class="trial-card active" style="margin-top:8px;">
+            <div class="trial-title" id="trialTitle">جاري تحميل بيانات الاشتراك...</div>
+            <div class="trial-sub" id="trialSub"></div>
+            <a id="trialUpgradeBtn" href="https://haderedu.com/checkout" target="_blank" rel="noopener noreferrer"
+               class="trial-upgrade-btn" style="display:none;">اشترك الآن ←</a>
+        </div>
+        <div id="quotaDisplay" style="margin-top: 4px; font-weight: 500; font-size:11px; color:#718096;"></div>
     </div>
 
     <!-- Logout -->
@@ -746,7 +805,7 @@
 
     <!-- Footer -->
     <div class="footer">
-        <p>الإصدار 10.0.4 | <a class="link-text" href="https://librechat-assiut-mo3eenfront.tfgpna.easypanel.host/contact" target="_blank" rel="noopener noreferrer">التواصل مع الدعم</a></p>
+        <p>الإصدار 10.0.4 | <a class="link-text" href="https://haderedu.com/contact" target="_blank" rel="noopener noreferrer">التواصل مع الدعم</a></p>
         <p>يعمل على منصة مدرستي فقط</p>
     </div>
 
