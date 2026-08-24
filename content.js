@@ -245,6 +245,22 @@
 
         var context = _lastLessonContext || {};
         var searchParams = new URLSearchParams(window.location.search);
+
+        // Build selected_modules from context (which modules were actually prepared)
+        var selectedModules = [];
+        if (context.hasAssignment || context.selected_modules) {
+          selectedModules = context.selected_modules || [];
+        }
+        // Fallback: derive from last prepared payload content
+        if (!selectedModules.length && _lastPreparedPayload) {
+          var p = _lastPreparedPayload;
+          if (p.assignment || p.Assignment) selectedModules.push('assignment');
+          if (p.homework || p.Homework) selectedModules.push('homework');
+          if (p.enrichment || p.Enrichment) selectedModules.push('enrichment');
+          if (p.exam || p.Exam) selectedModules.push('exam');
+        }
+        if (!selectedModules.length) selectedModules = ['assignment']; // backend default
+
         var payload = {
           status: status === "DONE" ? "done" : "error",
           source: "extension",
@@ -256,12 +272,13 @@
           classroom_id: searchParams.get("ClassRoomId") || searchParams.get("classroom_id") || null,
           school_madrasati_id: searchParams.get("SchoolId") || searchParams.get("schoolId") || searchParams.get("real_school_id") || null,
           time_table_id: searchParams.get("TimeTableId") || searchParams.get("time_table_id") || null,
+          selected_modules: selectedModules,
           prepared_payload: normalizeForBackendLog(_lastPreparedPayload),
           error_message: status !== "DONE" ? (errorMessage || null) : null,
           automation_mode: (typeof AutomationController !== "undefined" && AutomationController.mode) || "auto"
         };
 
-        var apiBase = (CONFIG.API_BASE_URL || "https://librechat-assiut-moeen-backend.tfgpna.easypanel.host/api").replace(/\/+$/, "");
+        var apiBase = (CONFIG.API_BASE_URL || "https://api.haderedu.com/api").replace(/\/+$/, "");
         await fetch(apiBase + "/lesson-preparations/log", {
           method: "POST",
           headers: {
@@ -6232,150 +6249,178 @@
         return; // Stop all automation
       }
       // ── Authenticated: run boot ──
-      (function boot() {
-      // Auto-push session to Moeen if open
-      try {
-        const cookies = document.cookie;
-        const schoolMatch = window.location.href.match(/[?&](?:SchoolId|schoolId|real_school_id)=([a-f0-9]{32})/i);
-        let schoolId = schoolMatch ? schoolMatch[1] : "";
-        if (!schoolId) {
-          const schoolEl = document.querySelector('[href*="SchoolId="], [src*="SchoolId="]');
-          if (schoolEl) {
-            const match = (schoolEl.getAttribute('href') || schoolEl.getAttribute('src')).match(/SchoolId=([a-f0-9]{32})/i);
-            if (match) schoolId = match[1];
-          }
-        }
-        chrome.runtime.sendMessage({
-          action: "PUSH_MADRASATI_SESSION",
-          session_cookie: cookies,
-          madrasati_school_id: schoolId
-        }, () => void chrome.runtime.lastError);
-      } catch (e) {
-        console.warn("[Moeen Extension] Failed to auto-push session:", e);
-      }
-
-      removeControlPanel();
-      var staleDashboardPanel = document.getElementById("Moeen-2-dashboard-panel");
-      if (staleDashboardPanel) staleDashboardPanel.remove();
-      document.querySelectorAll(".Moeen-2-dashboard-select").forEach(function (select) {
-        select.remove();
-      });
-      if (document.body) document.body.style.paddingBottom = "";
-      return;
-
-      var bootPageState = detectPageState();
-
-      // --- IFRAME AUTOMATION HOOK (for blue-lesson fallback) ---
-      var isIframeMode = window.location.search.includes('Moeen-2_iframe') || window.name.includes('Moeen-2_iframe');
-
-      if (isIframeMode) {
-        // Persist the iframe marker across navigations within this subframe
-        if (window.location.search.includes('Moeen-2_iframe') && !window.name.includes('Moeen-2_iframe')) {
-          window.name = 'Moeen-2_iframe_master';
-        }
-
-        const originalFinish = AutomationController.finish;
-        AutomationController.finish = async function (status, message) {
-          await originalFinish.call(this, status, message);
-          window.parent.postMessage({ type: 'Moeen-2_IFRAME_DONE', success: status === "DONE" }, '*');
-        };
-
-        if (bootPageState === FLOW_STATES.DASHBOARD) {
-          // Either we landed here to click a blue cell, or we landed here AFTER a successful save
-          // redirected back. The presence of `Moeen-2_click` in the URL tells us which case.
-          var iframeParams = new URLSearchParams(window.location.search);
-          var clickToken = iframeParams.get('Moeen-2_click');
-
-          if (clickToken) {
-            setTimeout(() => {
-              var cellSelect = document.querySelector('.Moeen-2-dashboard-select[data-lesson-token="' + CSS.escape(clickToken) + '"]');
-              var cellDiv = cellSelect ? (cellSelect.closest('div[data-data]') || cellSelect.parentElement) : null;
-              var clickTarget = cellDiv && (cellDiv.querySelector('[onclick]') || cellDiv);
-
-              if (!clickTarget) {
-                // Fallback: any element on the page carrying the token
-                clickTarget = document.querySelector('[data-lesson-token="' + CSS.escape(clickToken) + '"]');
+      // Fix #2: Check subscription/quota BEFORE starting any automation
+      (async function boot() {
+        // 1. Check live subscription status from backend
+        var subscriptionOk = true;
+        var subscriptionCode = null;
+        try {
+          var authDataForSub = await getLocal([AUTH_SESSION_KEY]);
+          var sessionForSub = authDataForSub[AUTH_SESSION_KEY];
+          if (sessionForSub && sessionForSub.token) {
+            var apiBaseForSub = (CONFIG.API_BASE_URL || "https://api.haderedu.com/api").replace(/\/+$/, "");
+            var subResp = await fetch(apiBaseForSub + "/subscription/current", {
+              headers: {
+                "Accept": "application/json",
+                "Authorization": (sessionForSub.tokenType || "Bearer") + " " + sessionForSub.token
               }
+            });
+            var subData = await subResp.json();
+            subscriptionCode = subData && subData.code;
+            if (subResp.status === 402 || subscriptionCode === "trial_expired") {
+              subscriptionOk = false;
+            }
+          }
+        } catch (subErr) {
+          // Non-fatal: if network fails, allow extension to continue
+          console.warn("[حضر] Could not check subscription:", subErr);
+        }
 
-              if (clickTarget) {
-                try { clickTarget.click(); } catch (e) {
+        // 2. If trial expired / no subscription → show upgrade banner and stop
+        if (!subscriptionOk) {
+          var expiredBanner = document.createElement('div');
+          expiredBanner.id = 'hadar-trial-expired-banner';
+          expiredBanner.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:999999;background:linear-gradient(135deg,#b03000,#e05010);color:#fff;text-align:center;padding:12px 16px;font-family:system-ui,sans-serif;font-size:14px;direction:rtl;box-shadow:0 2px 12px rgba(180,50,0,0.4);';
+          expiredBanner.innerHTML = '⏰ <strong>حضر</strong> — انتهت فترتك التجريبية. <a href="https://haderedu.com/checkout" target="_blank" style="color:#ffe;text-decoration:underline;font-weight:bold;">اشترك الآن ←</a>';
+          document.body && document.body.prepend ? document.body.prepend(expiredBanner) : (document.body ? document.body.insertBefore(expiredBanner, document.body.firstChild) : null);
+          return; // Stop all automation
+        }
+
+        // 3. Auto-push Madrasati session to Moeen web app if it's open
+        try {
+          const cookies = document.cookie;
+          const schoolMatch = window.location.href.match(/[?&](?:SchoolId|schoolId|real_school_id)=([a-f0-9]{32})/i);
+          let schoolId = schoolMatch ? schoolMatch[1] : "";
+          if (!schoolId) {
+            const schoolEl = document.querySelector('[href*="SchoolId="], [src*="SchoolId="]');
+            if (schoolEl) {
+              const match = (schoolEl.getAttribute('href') || schoolEl.getAttribute('src')).match(/SchoolId=([a-f0-9]{32})/i);
+              if (match) schoolId = match[1];
+            }
+          }
+          chrome.runtime.sendMessage({
+            action: "PUSH_MADRASATI_SESSION",
+            session_cookie: cookies,
+            madrasati_school_id: schoolId
+          }, () => void chrome.runtime.lastError);
+        } catch (e) {
+          console.warn("[Moeen Extension] Failed to auto-push session:", e);
+        }
+
+        // Fix #1: Removed early return — boot now continues into full automation logic
+        var bootPageState = detectPageState();
+
+        // --- IFRAME AUTOMATION HOOK (for blue-lesson fallback) ---
+        var isIframeMode = window.location.search.includes('Moeen-2_iframe') || window.name.includes('Moeen-2_iframe');
+
+        if (isIframeMode) {
+          // Persist the iframe marker across navigations within this subframe
+          if (window.location.search.includes('Moeen-2_iframe') && !window.name.includes('Moeen-2_iframe')) {
+            window.name = 'Moeen-2_iframe_master';
+          }
+
+          const originalFinish = AutomationController.finish;
+          AutomationController.finish = async function (status, message) {
+            await originalFinish.call(this, status, message);
+            window.parent.postMessage({ type: 'Moeen-2_IFRAME_DONE', success: status === "DONE" }, '*');
+          };
+
+          if (bootPageState === FLOW_STATES.DASHBOARD) {
+            // Either we landed here to click a blue cell, or we landed here AFTER a successful save
+            // redirected back. The presence of `Moeen-2_click` in the URL tells us which case.
+            var iframeParams = new URLSearchParams(window.location.search);
+            var clickToken = iframeParams.get('Moeen-2_click');
+
+            if (clickToken) {
+              setTimeout(() => {
+                var cellSelect = document.querySelector('.Moeen-2-dashboard-select[data-lesson-token="' + CSS.escape(clickToken) + '"]');
+                var cellDiv = cellSelect ? (cellSelect.closest('div[data-data]') || cellSelect.parentElement) : null;
+                var clickTarget = cellDiv && (cellDiv.querySelector('[onclick]') || cellDiv);
+
+                if (!clickTarget) {
+                  // Fallback: any element on the page carrying the token
+                  clickTarget = document.querySelector('[data-lesson-token="' + CSS.escape(clickToken) + '"]');
+                }
+
+                if (clickTarget) {
+                  try { clickTarget.click(); } catch (e) {
+                    window.parent.postMessage({ type: 'Moeen-2_IFRAME_DONE', success: false }, '*');
+                  }
+                  // Madrasati's click handler should now navigate this subframe to ManageLecture.
+                  // The boot hook will fire again on STEP1 and start the automation.
+                } else {
+                  console.error('[Moeen-2] iframe could not find cell for token', clickToken);
                   window.parent.postMessage({ type: 'Moeen-2_IFRAME_DONE', success: false }, '*');
                 }
-                // Madrasati's click handler should now navigate this subframe to ManageLecture.
-                // The boot hook will fire again on STEP1 and start the automation.
-              } else {
-                console.error('[Moeen-2] iframe could not find cell for token', clickToken);
-                window.parent.postMessage({ type: 'Moeen-2_IFRAME_DONE', success: false }, '*');
-              }
-            }, 1500);
+              }, 1500);
+              return;
+            }
+
+            // No click instruction — assume we got here via post-save redirect (success)
+            window.parent.postMessage({ type: 'Moeen-2_IFRAME_DONE', success: true }, '*');
             return;
           }
 
-          // No click instruction — assume we got here via post-save redirect (success)
-          window.parent.postMessage({ type: 'Moeen-2_IFRAME_DONE', success: true }, '*');
+          if (bootPageState === FLOW_STATES.STEP1) {
+            setTimeout(() => { AutomationController.start('auto'); }, 1000);
+          }
+        }
+        // ---------------------------------------------------------
+
+        if (bootPageState === FLOW_STATES.DASHBOARD && !isIframeMode) {
+          injectDashboardUI();
           return;
         }
 
-        if (bootPageState === FLOW_STATES.STEP1) {
-          setTimeout(() => { AutomationController.start('auto'); }, 1000);
-        }
-      }
-      // ---------------------------------------------------------
+        startMutationObserver();
 
-      if (bootPageState === FLOW_STATES.DASHBOARD && !isIframeMode) {
-        injectDashboardUI();
-        return;
-      }
+        if (!isContextAlive()) return;
+        chrome.runtime.sendMessage({ type: "GET_RUNNING" }, async (response) => {
+          if (chrome.runtime.lastError) return;
+          isEnabled = !!(response && response.running);
+          const data = await AutomationController.loadState();
+          const terminalStates = [FLOW_STATES.DONE, FLOW_STATES.ERROR, FLOW_STATES.IDLE];
 
-      startMutationObserver();
-
-      if (!isContextAlive()) return;
-      chrome.runtime.sendMessage({ type: "GET_RUNNING" }, async (response) => {
-        if (chrome.runtime.lastError) return;
-        isEnabled = !!(response && response.running);
-        const data = await AutomationController.loadState();
-        const terminalStates = [FLOW_STATES.DONE, FLOW_STATES.ERROR, FLOW_STATES.IDLE];
-
-        // استئناف الحالة المحفوظة في حالة تحديث الصفحة أو الانتقال التلقائي
-        if (AutomationController.state === FLOW_STATES.DONE || AutomationController.state === FLOW_STATES.ERROR) {
-          const currentPathKey = getAutomationActionKey("path-info");
-          if (currentPathKey !== data.storedPathKey) {
-            AutomationController.state = FLOW_STATES.IDLE;
+          // استئناف الحالة المحفوظة في حالة تحديث الصفحة أو الانتقال التلقائي
+          if (AutomationController.state === FLOW_STATES.DONE || AutomationController.state === FLOW_STATES.ERROR) {
+            const currentPathKey = getAutomationActionKey("path-info");
+            if (currentPathKey !== data.storedPathKey) {
+              AutomationController.state = FLOW_STATES.IDLE;
+              return;
+            }
+            isEnabled = false;
+            setButtonsDisabled(false);
+            updatePrimaryButton(
+              AutomationController.state === FLOW_STATES.DONE ? "تم تحضير الدرس" : "فشل التحضير",
+              AutomationController.state === FLOW_STATES.DONE ? "success" : "error"
+            );
+            updateControlStatus("تم إنهاء التحضير مسبقاً. جاري مزامنة الحالة...", "info");
+            await sendAutomationStatus(AutomationController.state === FLOW_STATES.DONE ? "DONE" : "ERROR", {
+              state: AutomationController.state,
+              message: "Stored automation state was already complete."
+            });
+            await clearSaveSubmittedMarker();
             return;
           }
-          isEnabled = false;
-          setButtonsDisabled(false);
-          updatePrimaryButton(
-            AutomationController.state === FLOW_STATES.DONE ? "تم تحضير الدرس" : "فشل التحضير",
-            AutomationController.state === FLOW_STATES.DONE ? "success" : "error"
-          );
-          updateControlStatus("تم إنهاء التحضير مسبقاً. جاري مزامنة الحالة...", "info");
-          await sendAutomationStatus(AutomationController.state === FLOW_STATES.DONE ? "DONE" : "ERROR", {
-            state: AutomationController.state,
-            message: "Stored automation state was already complete."
-          });
-          await clearSaveSubmittedMarker();
-          return;
-        }
 
-        // استئناف الخطوة الثانية (Step 2) فور الوصول لصفحة النموذج
-        if (AutomationController.state === FLOW_STATES.STEP2 && detectPageState() === FLOW_STATES.STEP2) {
-          isEnabled = true;
-          setButtonsDisabled(true);
-          updatePrimaryButton("جاري الاستئناف...", "loading");
-          updateControlStatus("تم اكتشاف نموذج الدرس. جاري تعبئة الحقول وحفظ الدرس...", "info");
-          void AutomationController.run();
-          return;
-        }
+          // استئناف الخطوة الثانية (Step 2) فور الوصول لصفحة النموذج
+          if (AutomationController.state === FLOW_STATES.STEP2 && detectPageState() === FLOW_STATES.STEP2) {
+            isEnabled = true;
+            setButtonsDisabled(true);
+            updatePrimaryButton("جاري الاستئناف...", "loading");
+            updateControlStatus("تم اكتشاف نموذج الدرس. جاري تعبئة الحقول وحفظ الدرس...", "info");
+            void AutomationController.run();
+            return;
+          }
 
-        if (isEnabled && !terminalStates.includes(AutomationController.state)) {
-          setButtonsDisabled(true);
-          updatePrimaryButton("جاري الاستئناف...", "loading");
-          updateControlStatus("يتم استئناف التحضير بعد تحديث الصفحة...", "info");
-          void AutomationController.run();
-        }
-      });
-    })();
+          if (isEnabled && !terminalStates.includes(AutomationController.state)) {
+            setButtonsDisabled(true);
+            updatePrimaryButton("جاري الاستئناف...", "loading");
+            updateControlStatus("يتم استئناف التحضير بعد تحديث الصفحة...", "info");
+            void AutomationController.run();
+          }
+        });
+      })();
     }); // end checkAuthAndBoot().then()
   })();
 })();

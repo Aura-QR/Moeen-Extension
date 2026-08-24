@@ -433,6 +433,58 @@
             line-height: 1.7;
         }
 
+        /* ── Trial Status Card ── */
+        .trial-card {
+            border-radius: 10px;
+            padding: 12px 14px;
+            margin-bottom: 12px;
+            font-size: 12px;
+            line-height: 1.7;
+        }
+        .trial-card.active {
+            background: linear-gradient(135deg, #eaf9f2 0%, #f5fdf9 100%);
+            border: 1px solid #a7e6c6;
+        }
+        .trial-card.last-day {
+            background: linear-gradient(135deg, #fef9ec 0%, #fffdf5 100%);
+            border: 1px solid #f0d38a;
+        }
+        .trial-card.expired {
+            background: linear-gradient(135deg, #fef2f2 0%, #fff8f8 100%);
+            border: 1px solid #fca5a5;
+        }
+        .trial-card.subscribed {
+            background: linear-gradient(135deg, #eaf9f2 0%, #f5fdf9 100%);
+            border: 1px solid #a7e6c6;
+        }
+        .trial-title {
+            font-weight: 800;
+            font-size: 13px;
+            margin-bottom: 3px;
+        }
+        .trial-card.active .trial-title { color: #065f46; }
+        .trial-card.last-day .trial-title { color: #92400e; }
+        .trial-card.expired .trial-title { color: #991b1b; }
+        .trial-card.subscribed .trial-title { color: #065f46; }
+        .trial-sub { color: #6b7280; font-size: 11px; }
+        .trial-upgrade-btn {
+            display: inline-block;
+            margin-top: 8px;
+            background: #0e7a5e;
+            color: #fff;
+            border: none;
+            border-radius: 7px;
+            padding: 6px 14px;
+            font-size: 12px;
+            font-weight: 700;
+            cursor: pointer;
+            text-decoration: none;
+            transition: background 0.18s;
+        }
+        .trial-upgrade-btn:hover { background: #065f46; }
+        .trial-upgrade-btn.urgent { background: #b91c1c; }
+        .trial-upgrade-btn.urgent:hover { background: #991b1b; }
+
         .account-note strong {
             color: var(--moeen-heading);
         }
@@ -601,6 +653,15 @@
         <div id="backendStatus" class="backend-status checking">جاري فحص الخادم</div>
     </div>
 
+    <!-- Prominent Disclosure Card -->
+    <div style="background: rgba(234, 247, 242, 0.7); border: 1px solid var(--moeen-border); border-radius: 8px; padding: 10px 12px; margin-bottom: 12px; font-size: 11px; line-height: 1.5; color: var(--moeen-text);">
+        <strong style="color: var(--moeen-heading); display: block; margin-bottom: 4px;">🛡️ إفصاح خصوصية البيانات:</strong>
+        تعمل الإضافة على قراءة مدخلات نموذج الدرس المحدد في منصة مدرستي لتعبئة التحضير آلياً ومزامنة جدولك بحسابك. لا يتم جمع أو حفظ كلمات المرور.
+        <div style="margin-top: 5px;">
+            <a href="https://haderedu.com/privacy-policy-extension" target="_blank" rel="noopener noreferrer" style="color: var(--moeen-primary); font-weight: 700; text-decoration: none;">سياسة خصوصية الإضافة ←</a>
+        </div>
+    </div>
+
     <!-- Login Card -->
     <div class="card">
         <div class="card-title">تسجيل الدخول</div>
@@ -652,7 +713,7 @@
                 <span class="support-label">دعم فني (2)</span>
                 <span class="support-number">056 744 8881</span>
                 <div class="support-links">
-                    <a href="tel:0565101406" class="support-link call" title="اتصال هاتفي">
+                    <a href="tel:0567448881" class="support-link call" title="اتصال هاتفي">
                         <svg viewBox="0 0 16 16" fill="currentColor"><path fill-rule="evenodd" d="M1.885.511a1.745 1.745 0 0 1 2.61.163L6.29 2.98c.329.423.445.974.315 1.494l-.547 2.19a.68.68 0 0 0 .178.643l2.457 2.457a.68.68 0 0 0 .643.178l2.19-.547a1.75 1.75 0 0 1 1.494.315l2.306 1.794c.829.645.905 1.87.163 2.611l-1.034 1.034c-.74.74-1.846 1.065-2.877.702a18.6 18.6 0 0 1-7.01-4.42 18.6 18.6 0 0 1-4.42-7.009c-.362-1.03-.037-2.137.703-2.877z"/></svg>
                     </a>
                     <a href="https://wa.me/966567448881" target="_blank" rel="noopener noreferrer" class="support-link whatsapp" title="محادثة واتساب">
@@ -665,7 +726,11 @@
 
     <!-- Footer -->
     <div class="footer">
-        <a class="link-text" href="https://haderedu.com/contact" target="_blank" rel="noopener noreferrer">التواصل مع الدعم</a>
+        <p>
+            <a class="link-text" href="https://haderedu.com/privacy-policy-extension" target="_blank" rel="noopener noreferrer">سياسة الخصوصية للإضافة</a>
+            •
+            <a class="link-text" href="https://haderedu.com/contact" target="_blank" rel="noopener noreferrer">التواصل مع الدعم</a>
+        </p>
     </div>
 
 </div>
@@ -700,7 +765,14 @@
 
     <div class="account-note">
         <strong>الحساب متصل.</strong>
-        يمكنك الآن استخدام الامتداد على صفحات منصة مدرستي المسموح بها.
+        <!-- Trial / Subscription status rendered by popup.js -->
+        <div id="trialStatusCard" class="trial-card active" style="margin-top:8px;">
+            <div class="trial-title" id="trialTitle">جاري تحميل بيانات الاشتراك...</div>
+            <div class="trial-sub" id="trialSub"></div>
+            <a id="trialUpgradeBtn" href="https://haderedu.com/checkout" target="_blank" rel="noopener noreferrer"
+               class="trial-upgrade-btn" style="display:none;">اشترك الآن ←</a>
+        </div>
+        <div id="quotaDisplay" style="margin-top: 4px; font-weight: 500; font-size:11px; color:#718096;"></div>
     </div>
 
     <!-- Logout -->
@@ -746,7 +818,7 @@
 
     <!-- Footer -->
     <div class="footer">
-        <p>الإصدار 10.0.4 | <a class="link-text" href="https://haderedu.com/contact" target="_blank" rel="noopener noreferrer">التواصل مع الدعم</a></p>
+        <p>الإصدار 10.0.5 | <a class="link-text" href="https://haderedu.com/privacy-policy-extension" target="_blank" rel="noopener noreferrer">سياسة الخصوصية</a> | <a class="link-text" href="https://haderedu.com/contact" target="_blank" rel="noopener noreferrer">الدعم الفني</a></p>
         <p>يعمل على منصة مدرستي فقط</p>
     </div>
 

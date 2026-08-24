@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "حضر",
   "description": "تبسيط تعديل واعداد الحصص للمعلم",
-  "version": "10.0.4",
+  "version": "10.0.5",
 
   "icons": {
     "16": "logo/logo-16.png",

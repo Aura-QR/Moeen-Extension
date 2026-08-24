@@ -186,7 +186,7 @@
                 // Also update old quotaDisplay if present
                 if (quotaEl) {
                     const remaining = data.usage?.lessons_remaining_today;
-                    quotaEl.textContent = remaining !== undefined
+                    quotaEl.textContent = remaining !== undefined && remaining !== null
                         ? `دروس متبقية اليوم: ${remaining}`
                         : '';
                 }
@@ -198,14 +198,17 @@
                 if (trialCard) {
                     trialCard.className = 'trial-card subscribed';
                     trialTitle.textContent = `✅ مشترك — ${data.plan.name}`;
-                    trialSub.textContent   = 'اشتراكك فعال، استمتع بكامل المميزات.';
+                    trialSub.textContent   = data.is_unlimited || data.plan.slug === 'full_year'
+                        ? 'اشتراك سنوي كامل • تحضير وذكاء اصطناعي غير محدود'
+                        : 'تحضير 30 درسًا يوميًا • 200 توليد ذكاء اصطناعي';
                     trialUpgradeBtn.style.display = 'none';
                 }
                 if (quotaEl) {
                     const remaining = data.usage?.lessons_remaining_today;
-                    quotaEl.textContent = remaining !== undefined
-                        ? `دروس متبقية اليوم: ${remaining}`
-                        : '';
+                    const isUnlimited = data.is_unlimited || remaining === null || (typeof remaining === 'number' && remaining >= 9999);
+                    quotaEl.textContent = isUnlimited
+                        ? 'تحضيرات اليوم: غير محدود'
+                        : (remaining !== undefined ? `دروس متبقية اليوم: ${remaining}` : '');
                 }
                 return;
             }

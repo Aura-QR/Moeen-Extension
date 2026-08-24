@@ -126,6 +126,108 @@
         if (!session || !session.user) return;
         if (userNameDisplay)  userNameDisplay.textContent  = session.user.name  || '—';
         if (userEmailDisplay) userEmailDisplay.textContent = session.user.email || '—';
+        fetchAndDisplayQuota(session);
+    }
+
+    async function fetchAndDisplayQuota(session) {
+        if (!session || !session.token) return;
+
+        // DOM refs for trial card
+        const trialCard       = document.getElementById('trialStatusCard');
+        const trialTitle      = document.getElementById('trialTitle');
+        const trialSub        = document.getElementById('trialSub');
+        const trialUpgradeBtn = document.getElementById('trialUpgradeBtn');
+        const quotaEl         = document.getElementById('quotaDisplay');
+
+        try {
+            const resp = await apiFetch('/subscription/current', {
+                headers: {
+                    'Authorization': `${session.tokenType || 'Bearer'} ${session.token}`
+                }
+            });
+
+            const data = await resp.json();
+
+            // ── Trial expired (402) ──────────────────────────────────────────
+            if (resp.status === 402 || data.code === 'trial_expired') {
+                if (trialCard) {
+                    trialCard.className = 'trial-card expired';
+                    trialTitle.textContent = '⏰ انتهت فترتك التجريبية';
+                    trialSub.textContent   = 'اشترك الآن لمواصلة استخدام حضّر على مدرستي.';
+                    trialUpgradeBtn.style.display = 'inline-block';
+                    trialUpgradeBtn.classList.add('urgent');
+                    trialUpgradeBtn.textContent = 'اشترك الآن ←';
+                }
+                if (quotaEl) quotaEl.textContent = '';
+                return;
+            }
+
+            // ── Active trial ─────────────────────────────────────────────────
+            if (data.is_in_trial) {
+                const days = data.trial_days_remaining ?? 0;
+                const isLastDay = days <= 1;
+
+                if (trialCard) {
+                    trialCard.className = `trial-card ${isLastDay ? 'last-day' : 'active'}`;
+                    trialTitle.textContent = isLastDay
+                        ? '⚠️ آخر يوم في تجربتك المجانية!'
+                        : `🎉 تجربة مجانية — متبقي ${days} ${days === 1 ? 'يوم' : 'أيام'}`;
+                    trialSub.textContent = 'تحضير 15 درسًا يوميًا • 200 توليد ذكاء اصطناعي';
+
+                    // Show upgrade button on last day
+                    if (isLastDay) {
+                        trialUpgradeBtn.style.display = 'inline-block';
+                        trialUpgradeBtn.textContent = 'اشترك قبل انتهاء التجربة ←';
+                    } else {
+                        trialUpgradeBtn.style.display = 'none';
+                    }
+                }
+
+                // Also update old quotaDisplay if present
+                if (quotaEl) {
+                    const remaining = data.usage?.lessons_remaining_today;
+                    quotaEl.textContent = remaining !== undefined && remaining !== null
+                        ? `دروس متبقية اليوم: ${remaining}`
+                        : '';
+                }
+                return;
+            }
+
+            // ── Active paid subscription ─────────────────────────────────────
+            if (data.plan) {
+                if (trialCard) {
+                    trialCard.className = 'trial-card subscribed';
+                    trialTitle.textContent = `✅ مشترك — ${data.plan.name}`;
+                    trialSub.textContent   = data.is_unlimited || data.plan.slug === 'full_year'
+                        ? 'اشتراك سنوي كامل • تحضير وذكاء اصطناعي غير محدود'
+                        : 'تحضير 30 درسًا يوميًا • 200 توليد ذكاء اصطناعي';
+                    trialUpgradeBtn.style.display = 'none';
+                }
+                if (quotaEl) {
+                    const remaining = data.usage?.lessons_remaining_today;
+                    const isUnlimited = data.is_unlimited || remaining === null || (typeof remaining === 'number' && remaining >= 9999);
+                    quotaEl.textContent = isUnlimited
+                        ? 'تحضيرات اليوم: غير محدود'
+                        : (remaining !== undefined ? `دروس متبقية اليوم: ${remaining}` : '');
+                }
+                return;
+            }
+
+            // ── Fallback ─────────────────────────────────────────────────────
+            if (trialCard) {
+                trialCard.className = 'trial-card expired';
+                trialTitle.textContent = '⚠️ لا يوجد اشتراك نشط';
+                trialSub.textContent   = 'يرجى الاشتراك للاستمرار في استخدام حضّر.';
+                trialUpgradeBtn.style.display = 'inline-block';
+                trialUpgradeBtn.classList.add('urgent');
+            }
+
+        } catch (_) {
+            // Non-fatal – keep loading state
+            if (trialCard && trialTitle) {
+                trialTitle.textContent = 'تعذّر تحميل بيانات الاشتراك';
+            }
+        }
     }
 
     // ── Login handler ────────────────────────────────────────────────────────
