@@ -1062,13 +1062,19 @@
     function setFinalSaveButtonDetector(detector) {
       findFinalSaveButton = typeof detector === "function" ? detector : () => null;
     }
+    function isLessonManagementPath(pathname) {
+      return /\/SchoolSchedule\/Schedule\/(?:ManageLecture|EditLecture|DeleteLecture)(?:\/|$)/i.test(
+        pathname || window.location.pathname
+      );
+    }
     function detectPageState() {
-      var isScheduleUrl = /\/SchoolSchedule(?:\/Schedule)?(?:\/|$)/i.test(window.location.pathname) ||
+      var isLessonManagementUrl = isLessonManagementPath();
+      var isScheduleUrl = /^\/SchoolSchedule(?:\/Schedule(?:\/TeacherSchedule)?)?\/?$/i.test(window.location.pathname) ||
         /\/services\/(?:my[-_/]?)?schedule(?:\/|$)/i.test(window.location.pathname);
       var hasTimeTable = Boolean(
         document.querySelector('.calendar-table, .table-schedule, .schedule-table, .fc-view, .timetable, .scheduler-table')
       );
-      if (isScheduleUrl || hasTimeTable) return FLOW_STATES.DASHBOARD;
+      if (!isLessonManagementUrl && (isScheduleUrl || hasTimeTable)) return FLOW_STATES.DASHBOARD;
       const setupVisible = STEP1_SELECT_IDS.some((id) => isTrulyVisible(document.getElementById(id)));
       if (setupVisible) return FLOW_STATES.STEP1;
       const hasLessonForm = getVisibleElements("textarea").length > 0 || getVisibleElements('[contenteditable="true"]').length > 0 || Boolean(findFinalSaveButton());
@@ -1808,6 +1814,7 @@
             continue;
           }
           var options = await fetchLessonTreeOptions(item.subjectId, item.subjectName);
+          if (detectPageState() !== FLOW_STATES.DASHBOARD) return;
           if (!document.contains(item.card) || !options.length) continue;
           var select = createDashboardSelectDropdown(item.token, options);
           select.setAttribute('data-lesson-token', item.token);
@@ -1842,6 +1849,11 @@
       if (scheduleRouteWatcher) return;
       function updateSurface() {
         if (!isTopLevelPage()) return;
+        if (isLessonManagementPath()) {
+          removeDashboardUI();
+          removePresenceBadge();
+          return;
+        }
         if (detectPageState() === FLOW_STATES.DASHBOARD) {
           removePresenceBadge();
           void injectDashboardUI();
