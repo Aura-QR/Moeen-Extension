@@ -219,6 +219,45 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     return true;
   }
 
+  // Content scripts inherit the page origin for CORS, so authenticated API
+  // requests must be proxied through the extension service worker.
+  if (msg?.action === 'GET_SUBSCRIPTION_CURRENT') {
+    const apiBase = (globalThis.Moeen2_CONFIG?.API_BASE_URL || 'https://api.haderedu.com/api').replace(/\/+$/, '');
+    fetch(apiBase + '/subscription/current', {
+      headers: {
+        'Accept': 'application/json',
+        'Authorization': `${msg.tokenType || 'Bearer'} ${msg.token || ''}`
+      }
+    })
+      .then(async (response) => {
+        let data = null;
+        try { data = await response.json(); } catch (_) { }
+        sendResponse({ ok: true, status: response.status, data });
+      })
+      .catch((error) => sendResponse({ ok: false, error: error?.message || String(error) }));
+    return true;
+  }
+
+  if (msg?.action === 'LOG_LESSON_PREPARATION') {
+    const apiBase = (globalThis.Moeen2_CONFIG?.API_BASE_URL || 'https://api.haderedu.com/api').replace(/\/+$/, '');
+    fetch(apiBase + '/lesson-preparations/log', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'Authorization': `${msg.tokenType || 'Bearer'} ${msg.token || ''}`
+      },
+      body: JSON.stringify(msg.payload || {})
+    })
+      .then(async (response) => {
+        let data = null;
+        try { data = await response.json(); } catch (_) { }
+        sendResponse({ ok: response.ok, status: response.status, data });
+      })
+      .catch((error) => sendResponse({ ok: false, error: error?.message || String(error) }));
+    return true;
+  }
+
   // --- A. Data Requests from content.js ---
   if (msg?.action === 'GET_LESSON_DATA' || msg?.action === 'GET_TEMPLATES') {
     if (!dbCache.isLoaded) {

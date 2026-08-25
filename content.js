@@ -278,16 +278,15 @@
           automation_mode: (typeof AutomationController !== "undefined" && AutomationController.mode) || "auto"
         };
 
-        var apiBase = (CONFIG.API_BASE_URL || "https://api.haderedu.com/api").replace(/\/+$/, "");
-        await fetch(apiBase + "/lesson-preparations/log", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Accept": "application/json",
-            "Authorization": (session.tokenType || "Bearer") + " " + session.token
-          },
-          body: JSON.stringify(payload)
+        var logResult = await sendRuntimeMessage({
+          action: "LOG_LESSON_PREPARATION",
+          token: session.token,
+          tokenType: session.tokenType || "Bearer",
+          payload: payload
         });
+        if (!logResult || !logResult.ok) {
+          throw new Error(logResult && logResult.error ? logResult.error : "Backend log request failed");
+        }
 
         log("logPreparationToBackend: sent successfully to Hader backend");
       } catch (err) {
@@ -1064,9 +1063,10 @@
       findFinalSaveButton = typeof detector === "function" ? detector : () => null;
     }
     function detectPageState() {
-      var isScheduleUrl = /\/SchoolSchedule\/Schedule/i.test(window.location.pathname);
+      var isScheduleUrl = /\/SchoolSchedule(?:\/Schedule)?(?:\/|$)/i.test(window.location.pathname) ||
+        /\/services\/(?:my[-_/]?)?schedule(?:\/|$)/i.test(window.location.pathname);
       var hasTimeTable = Boolean(
-        document.querySelector('.calendar-table, .table-schedule, .schedule-table, .fc-view, .timetable, .scheduler-table')
+        document.querySelector('.calendar-table, .table-schedule, .schedule-table, .fc-view, .timetable, .scheduler-table, [data-timetable-id], [data-time-table-id]')
       );
       if (isScheduleUrl || hasTimeTable) return FLOW_STATES.DASHBOARD;
       const setupVisible = STEP1_SELECT_IDS.some((id) => isTrulyVisible(document.getElementById(id)));
@@ -1079,6 +1079,9 @@
     // src/content/dashboard-ui.js
     var dashboardInjected = false;
     var dashboardLessonCount = 0;
+    var dashboardScanRunning = false;
+    var dashboardPollTimer = null;
+    var scheduleRouteWatcher = null;
 
     async function fetchLessonTreeOptions(subjectId, subjectName) {
       var optionsArray = [];
@@ -1199,18 +1202,116 @@
     }
 
     function updateDashboardCounter() {
-      document.querySelectorAll(".Moeen-2-dashboard-select").forEach(function (select) {
-        select.remove();
+      var allSelects = document.querySelectorAll(".Moeen-2-dashboard-select");
+      var selected = 0;
+      for (var select of allSelects) {
+        if (select.value) selected++;
+      }
+      var counter = document.getElementById("Moeen-2-dashboard-counter");
+      if (counter) counter.textContent = selected + " من " + allSelects.length;
+
+      var anyResource = Object.keys(_Moeen2ResEnabled).some(function (key) {
+        return _Moeen2ResEnabled[key];
       });
+      var saveBtn = document.getElementById("Moeen-2-dashboard-save");
+      if (saveBtn) {
+        saveBtn.disabled = selected === 0 || !anyResource;
+        saveBtn.style.opacity = saveBtn.disabled ? "0.5" : "1";
+        saveBtn.style.cursor = saveBtn.disabled ? "not-allowed" : "pointer";
+      }
+      var hint = document.getElementById("Moeen-2-res-hint");
+      if (hint) hint.style.display = anyResource ? "none" : "inline";
     }
 
     function injectDashboardPanel() {
-      var panel = document.getElementById("Moeen-2-dashboard-panel");
-      if (panel) panel.remove();
-      document.querySelectorAll(".Moeen-2-dashboard-select").forEach(function (select) {
-        select.remove();
+      if (document.getElementById("Moeen-2-dashboard-panel")) return;
+
+      if (!document.getElementById("Moeen-2-dashboard-styles")) {
+        var style = document.createElement("style");
+        style.id = "Moeen-2-dashboard-styles";
+        style.textContent = [
+          "#Moeen-2-dashboard-panel{position:fixed;right:18px;bottom:18px;z-index:2147483647;width:min(560px,calc(100vw - 36px));box-sizing:border-box;background:#fff;border:1px solid rgba(14,122,94,.22);border-radius:16px;box-shadow:0 16px 48px rgba(15,23,42,.22);padding:14px;font-family:Cairo,Segoe UI,Tahoma,sans-serif;direction:rtl;color:#16324f}",
+          "#Moeen-2-dashboard-panel *{box-sizing:border-box}",
+          ".Moeen-2-dashboard-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap}",
+          ".Moeen-2-dashboard-title{font-size:16px;font-weight:900;color:#0e7a5e;margin-left:auto}",
+          ".Moeen-2-dashboard-badge{background:#eaf7f2;color:#0e7a5e;border:1px solid #b9dfd1;border-radius:999px;padding:4px 10px;font-size:12px;font-weight:700}",
+          "#Moeen-2-dashboard-status{font-size:12px;line-height:1.7;color:#6b7c93;margin:9px 0}",
+          ".Moeen-2-resources{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:10px}",
+          ".Moeen-2-res-pill{border:1px solid #d9e5e1;border-radius:999px;padding:5px 10px;background:#f8fbfa;font:700 11px Cairo,Segoe UI,Tahoma,sans-serif;cursor:pointer;color:#64748b}",
+          ".Moeen-2-res-pill[data-on=true]{background:#eaf7f2;border-color:#8dccb5;color:#0e7a5e}",
+          "#Moeen-2-dashboard-save{width:100%;border:0;border-radius:10px;background:linear-gradient(135deg,#0e7a5e,#075f49);color:#fff;padding:10px 14px;font:800 13px Cairo,Segoe UI,Tahoma,sans-serif}",
+          ".Moeen-2-dashboard-select{position:relative!important;z-index:10!important;display:block!important;width:calc(100% - 12px)!important;min-width:120px!important;margin:7px 6px 3px!important;padding:6px!important;border:1px solid #8dccb5!important;border-radius:7px!important;background:#fff!important;color:#16324f!important;font:600 11px Cairo,Segoe UI,Tahoma,sans-serif!important;direction:rtl!important}"
+        ].join("\n");
+        (document.head || document.documentElement).appendChild(style);
+      }
+
+      var panel = document.createElement("section");
+      panel.id = "Moeen-2-dashboard-panel";
+
+      var head = document.createElement("div");
+      head.className = "Moeen-2-dashboard-head";
+      var title = document.createElement("div");
+      title.className = "Moeen-2-dashboard-title";
+      title.textContent = "حضر — التحضير الجماعي";
+      var badge = document.createElement("span");
+      badge.className = "Moeen-2-dashboard-badge";
+      badge.id = "Moeen-2-dashboard-counter";
+      badge.textContent = "0 من 0";
+      head.append(title, badge);
+
+      var status = document.createElement("div");
+      status.id = "Moeen-2-dashboard-status";
+      status.textContent = "جاري فحص الجدول الدراسي...";
+
+      var resources = document.createElement("div");
+      resources.className = "Moeen-2-resources";
+      var resourceDefs = [
+        { key: "activity", label: "نشاط" },
+        { key: "homework", label: "واجب" },
+        { key: "exam", label: "اختبار" },
+        { key: "enrichment", label: "إثراء" }
+      ];
+      for (var definition of resourceDefs) {
+        (function (resource) {
+          var pill = document.createElement("button");
+          pill.type = "button";
+          pill.className = "Moeen-2-res-pill";
+          pill.textContent = resource.label;
+          pill.dataset.on = String(getResourceEnabled(resource.key));
+          pill.addEventListener("click", function () {
+            var enabled = !getResourceEnabled(resource.key);
+            setResourceEnabled(resource.key, enabled);
+            pill.dataset.on = String(enabled);
+            updateDashboardCounter();
+          });
+          resources.appendChild(pill);
+        })(definition);
+      }
+      var resourceHint = document.createElement("span");
+      resourceHint.id = "Moeen-2-res-hint";
+      resourceHint.textContent = "اختر مورداً واحداً على الأقل";
+      resourceHint.style.cssText = "display:none;color:#b45309;font-size:11px";
+      resources.appendChild(resourceHint);
+
+      var saveBtn = document.createElement("button");
+      saveBtn.id = "Moeen-2-dashboard-save";
+      saveBtn.type = "button";
+      saveBtn.disabled = true;
+      saveBtn.textContent = "حفظ وبدء التحضير";
+      saveBtn.addEventListener("click", async function () {
+        if (saveBtn.disabled) return;
+        saveBtn.disabled = true;
+        saveBtn.textContent = "جاري تحضير الحصص...";
+        try {
+          await handleDashboardSave();
+        } finally {
+          saveBtn.textContent = "حفظ وبدء التحضير";
+          updateDashboardCounter();
+        }
       });
-      if (document.body) document.body.style.paddingBottom = "";
+
+      panel.append(head, status, resources, saveBtn);
+      document.documentElement.appendChild(panel);
     }
     // ── Student Report Feature Stubs (to be implemented) ─────────────────────
     function extractAttachedResourceIds() {
@@ -1263,8 +1364,129 @@
       }
     }
 
+    function getScheduleCardMetadata(candidate) {
+      var anchor = candidate.matches && candidate.matches('a[href]') ? candidate :
+        candidate.querySelector && candidate.querySelector('a[href*="ManageLecture"],a[href*="lectureId="],a[href*="TimeTableId="]');
+      var card = candidate;
+      if (candidate.matches && candidate.matches('a[href]')) {
+        card = candidate.closest('div.cs-lesson-card,td,article,li,[role="gridcell"],[class*="lesson" i],[class*="schedule" i]') || candidate.parentElement;
+      }
+      if (!card) return null;
+
+      var url = null;
+      try { if (anchor && anchor.href) url = new URL(anchor.href, window.location.href); } catch (_) { }
+      function attr(names) {
+        for (var name of names) {
+          var value = card.getAttribute && card.getAttribute(name);
+          if (value) return String(value).trim();
+        }
+        return "";
+      }
+      function param(names) {
+        if (!url) return "";
+        for (var pair of url.searchParams.entries()) {
+          if (names.some(function (name) { return name.toLowerCase() === pair[0].toLowerCase(); })) return pair[1];
+        }
+        return "";
+      }
+
+      var token = attr(['data-data','data-timetable-id','data-time-table-id','data-lecture-id']) ||
+        param(['lectureId','TimeTableId','time_table_id','id']);
+      var subjectId = attr(['data-subject-id','data-subjectid']) || param(['subjectId','subject_id']);
+      var classId = attr(['data-class-id','data-classroom-id','data-classroomid']) || param(['classroomId','classId']);
+      if (!token) return null;
+
+      card.setAttribute('data-data', token);
+      if (subjectId) card.setAttribute('data-subject-id', subjectId);
+      if (classId && !card.getAttribute('data-class-id')) card.setAttribute('data-class-id', classId);
+      var heading = card.querySelector && card.querySelector('h2,h3,h4,[data-subject-name],.subject-name,.course-name');
+      var subjectName = heading ? (heading.textContent || '').trim() : attr(['data-subject-name']);
+      return { card: card, token: token, subjectId: subjectId, subjectName: subjectName };
+    }
+
+    function findScheduleCards() {
+      var selector = [
+        'td.day-cell div[data-data]',
+        'div.cs-lesson-card',
+        '[data-timetable-id]',
+        '[data-time-table-id]',
+        '[data-lecture-id]',
+        'a[href*="ManageLecture"]',
+        'a[href*="lectureId="]',
+        'a[href*="TimeTableId="]'
+      ].join(',');
+      var seen = new Set();
+      var result = [];
+      document.querySelectorAll(selector).forEach(function (candidate) {
+        var metadata = getScheduleCardMetadata(candidate);
+        if (!metadata || seen.has(metadata.card)) return;
+        seen.add(metadata.card);
+        result.push(metadata);
+      });
+      return result;
+    }
+
+    async function scanDashboardCards() {
+      if (dashboardScanRunning || detectPageState() !== FLOW_STATES.DASHBOARD) return;
+      dashboardScanRunning = true;
+      try {
+        injectDashboardPanel();
+        var cards = findScheduleCards();
+        dashboardLessonCount = cards.length;
+        if (!cards.length) {
+          updateDashboardStatus("تم تشغيل حضر، لكن لم يتم العثور على بطاقات الحصص بعد. سيتم الفحص تلقائياً.", "warning");
+          updateDashboardCounter();
+          return;
+        }
+
+        var added = 0;
+        var missingSubject = 0;
+        for (var item of cards) {
+          if (item.card.querySelector('.Moeen-2-dashboard-select')) continue;
+          if (!item.subjectId) {
+            missingSubject++;
+            continue;
+          }
+          var options = await fetchLessonTreeOptions(item.subjectId, item.subjectName);
+          if (!document.contains(item.card) || !options.length) continue;
+          var select = createDashboardSelectDropdown(item.token, options);
+          select.setAttribute('data-lesson-token', item.token);
+          item.card.appendChild(select);
+          added++;
+        }
+        updateDashboardCounter();
+        var total = document.querySelectorAll('.Moeen-2-dashboard-select').length;
+        if (total) {
+          updateDashboardStatus("اختر درساً لكل حصة ثم اضغط «حفظ وبدء التحضير» — " + total + " حصة متاحة", "info");
+        } else if (missingSubject === cards.length) {
+          updateDashboardStatus("ظهرت لوحة حضر، لكن بنية بطاقات الجدول الجديدة لا تعرض معرّف المادة بعد.", "warning");
+        } else if (!added) {
+          updateDashboardStatus("تم العثور على الحصص، لكن تعذّر تحميل قائمة الدروس.", "warning");
+        }
+      } finally {
+        dashboardScanRunning = false;
+      }
+    }
+
     async function injectDashboardUI() {
+      dashboardInjected = true;
       injectDashboardPanel();
+      void scanDashboardCards();
+      if (!dashboardPollTimer) {
+        dashboardPollTimer = setInterval(function () { void scanDashboardCards(); }, 1500);
+      }
+    }
+
+    function startScheduleRouteWatcher() {
+      if (scheduleRouteWatcher) return;
+      scheduleRouteWatcher = setInterval(function () {
+        if (detectPageState() === FLOW_STATES.DASHBOARD) {
+          void injectDashboardUI();
+          return;
+        }
+        var panel = document.getElementById("Moeen-2-dashboard-panel");
+        if (panel) panel.remove();
+      }, 1000);
     }
     // ── Step 3: Silent (headless) lesson-plan saver ─────────────────────────────
     // Madrasati requires at least one Assignment/Activity/Enrichment resource bound
@@ -6258,16 +6480,26 @@
           var authDataForSub = await getLocal([AUTH_SESSION_KEY]);
           var sessionForSub = authDataForSub[AUTH_SESSION_KEY];
           if (sessionForSub && sessionForSub.token) {
-            var apiBaseForSub = (CONFIG.API_BASE_URL || "https://api.haderedu.com/api").replace(/\/+$/, "");
-            var subResp = await fetch(apiBaseForSub + "/subscription/current", {
-              headers: {
-                "Accept": "application/json",
-                "Authorization": (sessionForSub.tokenType || "Bearer") + " " + sessionForSub.token
-              }
+            var subResult = await new Promise(function (resolve, reject) {
+              chrome.runtime.sendMessage({
+                action: "GET_SUBSCRIPTION_CURRENT",
+                token: sessionForSub.token,
+                tokenType: sessionForSub.tokenType || "Bearer"
+              }, function (response) {
+                if (chrome.runtime.lastError) {
+                  reject(new Error(chrome.runtime.lastError.message));
+                  return;
+                }
+                if (!response || !response.ok) {
+                  reject(new Error(response && response.error ? response.error : "Subscription request failed"));
+                  return;
+                }
+                resolve(response);
+              });
             });
-            var subData = await subResp.json();
+            var subData = subResult.data;
             subscriptionCode = subData && subData.code;
-            if (subResp.status === 402 || subscriptionCode === "trial_expired") {
+            if (subResult.status === 402 || subscriptionCode === "trial_expired") {
               subscriptionOk = false;
             }
           }
@@ -6306,6 +6538,8 @@
         } catch (e) {
           console.warn("[Moeen Extension] Failed to auto-push session:", e);
         }
+
+        startScheduleRouteWatcher();
 
         // Fix #1: Removed early return — boot now continues into full automation logic
         var bootPageState = detectPageState();
