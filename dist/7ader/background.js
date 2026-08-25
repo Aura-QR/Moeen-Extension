@@ -75,11 +75,25 @@ async function loadDatabases() {
 
     const coursesUrl = chrome.runtime.getURL('madrasati_courses_clean.json');
     const coursesRes = await fetch(coursesUrl);
+    if (!coursesRes.ok) {
+      throw new Error(`Could not load course database (${coursesRes.status})`);
+    }
     dbCache.courses = await coursesRes.json();
 
-    const templatesUrl = chrome.runtime.getURL('ee10_lesson_templates.json');
-    const templatesRes = await fetch(templatesUrl);
-    dbCache.templates = await templatesRes.json();
+    // Templates improve generated lesson text, but they are not required for
+    // course/lesson lookup. Keep the extension usable if this optional asset is
+    // absent or damaged instead of failing the entire database initialization.
+    try {
+      const templatesUrl = chrome.runtime.getURL('ee10_lesson_templates.json');
+      const templatesRes = await fetch(templatesUrl);
+      if (!templatesRes.ok) {
+        throw new Error(`Could not load lesson templates (${templatesRes.status})`);
+      }
+      dbCache.templates = await templatesRes.json();
+    } catch (templateError) {
+      console.warn("[Background] Lesson templates unavailable; continuing without them:", templateError);
+      dbCache.templates = { lesson_plan_sections: {} };
+    }
 
     const idx = buildSubjectIndex(dbCache.courses);
     dbCache.bySubjectId = idx.byId;

@@ -129,6 +129,28 @@
         fetchAndDisplayQuota(session);
     }
 
+    function getRemainingDays(endsAt, providedDays) {
+        if (typeof providedDays === 'number' && Number.isFinite(providedDays) && providedDays > 0) {
+            return Math.ceil(providedDays);
+        }
+        const endTime = Date.parse(endsAt || '');
+        if (!Number.isFinite(endTime)) return null;
+        const remainingMs = endTime - Date.now();
+        return remainingMs > 0 ? Math.max(1, Math.ceil(remainingMs / 86400000)) : 0;
+    }
+
+    function formatPlanLimits(data) {
+        const plan = data.plan || {};
+        if (data.is_unlimited || plan.is_unlimited || plan.slug === 'full_year') {
+            return 'تحضير وذكاء اصطناعي غير محدود';
+        }
+        const lessons = plan.lesson_limit_per_day;
+        const aiQuota = plan.ai_quota_per_month;
+        const lessonCopy = typeof lessons === 'number' ? `تحضير ${lessons} درسًا يوميًا` : 'حد التحضير حسب الخطة';
+        const aiCopy = typeof aiQuota === 'number' ? `${aiQuota} توليد ذكاء اصطناعي شهريًا` : 'ذكاء اصطناعي حسب الخطة';
+        return `${lessonCopy} • ${aiCopy}`;
+    }
+
     async function fetchAndDisplayQuota(session) {
         if (!session || !session.token) return;
 
@@ -150,13 +172,17 @@
 
             // ── Trial expired (402) ──────────────────────────────────────────
             if (resp.status === 402 || data.code === 'trial_expired') {
+                const isPaidExpired = data.code === 'subscription_expired';
+                const isPlanMissing = data.code === 'subscription_required';
                 if (trialCard) {
                     trialCard.className = 'trial-card expired';
-                    trialTitle.textContent = '⏰ انتهت فترتك التجريبية';
-                    trialSub.textContent   = 'اشترك الآن لمواصلة استخدام حضّر على مدرستي.';
+                    trialTitle.textContent = isPaidExpired
+                        ? '⏰ انتهى اشتراكك'
+                        : (isPlanMissing ? '🔒 لا توجد خطة نشطة' : '⏰ انتهت فترتك التجريبية');
+                    trialSub.textContent = data.message || 'اشترك الآن لمواصلة استخدام حضّر على مدرستي.';
                     trialUpgradeBtn.style.display = 'inline-block';
                     trialUpgradeBtn.classList.add('urgent');
-                    trialUpgradeBtn.textContent = 'اشترك الآن ←';
+                    trialUpgradeBtn.textContent = isPaidExpired ? 'جدّد الاشتراك ←' : 'اشترك الآن ←';
                 }
                 if (quotaEl) quotaEl.textContent = '';
                 return;
@@ -164,7 +190,7 @@
 
             // ── Active trial ─────────────────────────────────────────────────
             if (data.is_in_trial) {
-                const days = data.trial_days_remaining ?? 0;
+                const days = getRemainingDays(data.trial_ends_at, data.trial_days_remaining) ?? 0;
                 const isLastDay = days <= 1;
 
                 if (trialCard) {
@@ -195,12 +221,12 @@
 
             // ── Active paid subscription ─────────────────────────────────────
             if (data.plan) {
+                const days = getRemainingDays(data.subscription_ends_at, data.subscription_days_remaining);
+                const daysCopy = days === null ? '' : ` — متبقي ${days} ${days === 1 ? 'يوم' : 'أيام'}`;
                 if (trialCard) {
                     trialCard.className = 'trial-card subscribed';
-                    trialTitle.textContent = `✅ مشترك — ${data.plan.name}`;
-                    trialSub.textContent   = data.is_unlimited || data.plan.slug === 'full_year'
-                        ? 'اشتراك سنوي كامل • تحضير وذكاء اصطناعي غير محدود'
-                        : 'تحضير 30 درسًا يوميًا • 200 توليد ذكاء اصطناعي';
+                    trialTitle.textContent = `✅ ${data.plan.name}${daysCopy}`;
+                    trialSub.textContent = formatPlanLimits(data);
                     trialUpgradeBtn.style.display = 'none';
                 }
                 if (quotaEl) {

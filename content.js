@@ -1066,7 +1066,7 @@
       var isScheduleUrl = /\/SchoolSchedule(?:\/Schedule)?(?:\/|$)/i.test(window.location.pathname) ||
         /\/services\/(?:my[-_/]?)?schedule(?:\/|$)/i.test(window.location.pathname);
       var hasTimeTable = Boolean(
-        document.querySelector('.calendar-table, .table-schedule, .schedule-table, .fc-view, .timetable, .scheduler-table, [data-timetable-id], [data-time-table-id]')
+        document.querySelector('.calendar-table, .table-schedule, .schedule-table, .fc-view, .timetable, .scheduler-table')
       );
       if (isScheduleUrl || hasTimeTable) return FLOW_STATES.DASHBOARD;
       const setupVisible = STEP1_SELECT_IDS.some((id) => isTrulyVisible(document.getElementById(id)));
@@ -1082,6 +1082,11 @@
     var dashboardScanRunning = false;
     var dashboardPollTimer = null;
     var scheduleRouteWatcher = null;
+    var presenceBadgeState = "active";
+    var subscriptionBadgeData = null;
+    var subscriptionAccessAllowed = false;
+    var subscriptionAccessFailure = null;
+    var dashboardSelectionCache = new Map();
 
     async function fetchLessonTreeOptions(subjectId, subjectName) {
       var optionsArray = [];
@@ -1149,6 +1154,7 @@
       var select = document.createElement("select");
       select.className = "Moeen-2-dashboard-select";
       select.dataset.lessonId = lessonId;
+      select.setAttribute("data-lesson-token", lessonId);
       select.style.cssText = [
         "display:block",
         "width:90%",
@@ -1179,6 +1185,14 @@
         select.appendChild(optEl);
       }
 
+      if (dashboardSelectionCache.has(lessonId)) {
+        select.value = dashboardSelectionCache.get(lessonId);
+        if (select.value) {
+          select.style.borderColor = "#1a9448";
+          select.style.background = "rgba(26,148,72,0.04)";
+        }
+      }
+
       select.addEventListener("focus", function () {
         select.style.borderColor = "#1a6fd4";
         select.style.boxShadow = "0 0 0 3px rgba(26,111,212,0.12)";
@@ -1188,7 +1202,6 @@
         select.style.boxShadow = "none";
       });
       select.addEventListener("change", function () {
-        updateDashboardCounter();
         if (select.value) {
           select.style.borderColor = "#1a9448";
           select.style.background = "rgba(26,148,72,0.04)";
@@ -1196,6 +1209,21 @@
           select.style.borderColor = "rgba(26,111,212,0.35)";
           select.style.background = "#fff";
         }
+
+        // Madrasati can render responsive copies of the same lesson card.
+        // Keep every copy in sync so the user selects each lecture only once.
+        var lessonToken = select.getAttribute("data-lesson-token");
+        if (lessonToken) {
+          if (select.value) dashboardSelectionCache.set(lessonToken, select.value);
+          else dashboardSelectionCache.delete(lessonToken);
+          document.querySelectorAll(".Moeen-2-dashboard-select").forEach(function (sibling) {
+            if (sibling === select || sibling.getAttribute("data-lesson-token") !== lessonToken) return;
+            sibling.value = select.value;
+            sibling.style.borderColor = select.value ? "#1a9448" : "rgba(26,111,212,0.35)";
+            sibling.style.background = select.value ? "rgba(26,148,72,0.04)" : "#fff";
+          });
+        }
+        updateDashboardCounter();
       });
 
       return select;
@@ -1203,68 +1231,396 @@
 
     function updateDashboardCounter() {
       var allSelects = document.querySelectorAll(".Moeen-2-dashboard-select");
-      var selected = 0;
+      var allTokens = new Set();
+      var selectedTokens = new Set();
       for (var select of allSelects) {
-        if (select.value) selected++;
+        var token = select.getAttribute("data-lesson-token") || select.dataset.lessonId || String(allTokens.size);
+        allTokens.add(token);
+        if (select.value) selectedTokens.add(token);
       }
       var counter = document.getElementById("Moeen-2-dashboard-counter");
-      if (counter) counter.textContent = selected + " من " + allSelects.length;
+      if (counter) counter.textContent = selectedTokens.size + " من " + allTokens.size;
 
       var anyResource = Object.keys(_Moeen2ResEnabled).some(function (key) {
         return _Moeen2ResEnabled[key];
       });
       var saveBtn = document.getElementById("Moeen-2-dashboard-save");
       if (saveBtn) {
-        saveBtn.disabled = selected === 0 || !anyResource;
+        saveBtn.disabled = !subscriptionAccessAllowed || selectedTokens.size === 0 || !anyResource;
         saveBtn.style.opacity = saveBtn.disabled ? "0.5" : "1";
         saveBtn.style.cursor = saveBtn.disabled ? "not-allowed" : "pointer";
+        saveBtn.dataset.ready = String(!saveBtn.disabled);
       }
       var hint = document.getElementById("Moeen-2-res-hint");
       if (hint) hint.style.display = anyResource ? "none" : "inline";
     }
 
-    function injectDashboardPanel() {
-      if (document.getElementById("Moeen-2-dashboard-panel")) return;
+    function isTopLevelPage() {
+      try { return window.top === window.self; } catch (_) { return false; }
+    }
 
+    function ensureHadarSurfaceStyles() {
       if (!document.getElementById("Moeen-2-dashboard-styles")) {
         var style = document.createElement("style");
         style.id = "Moeen-2-dashboard-styles";
         style.textContent = [
+          "@keyframes hadarPulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.45;transform:scale(.72)}}",
           "#Moeen-2-dashboard-panel{position:fixed;right:18px;bottom:18px;z-index:2147483647;width:min(560px,calc(100vw - 36px));box-sizing:border-box;background:#fff;border:1px solid rgba(14,122,94,.22);border-radius:16px;box-shadow:0 16px 48px rgba(15,23,42,.22);padding:14px;font-family:Cairo,Segoe UI,Tahoma,sans-serif;direction:rtl;color:#16324f}",
           "#Moeen-2-dashboard-panel *{box-sizing:border-box}",
           ".Moeen-2-dashboard-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap}",
-          ".Moeen-2-dashboard-title{font-size:16px;font-weight:900;color:#0e7a5e;margin-left:auto}",
+          ".Moeen-2-dashboard-brand{display:flex;align-items:center;gap:9px;margin-left:auto}",
+          ".Moeen-2-dashboard-logo{width:34px;height:34px;border-radius:10px;box-shadow:0 4px 12px rgba(14,122,94,.2)}",
+          ".Moeen-2-dashboard-title{font-size:16px;font-weight:900;color:#0e7a5e;line-height:1.25}",
+          ".Moeen-2-dashboard-subtitle{font-size:10px;color:#718096;margin-top:2px}",
           ".Moeen-2-dashboard-badge{background:#eaf7f2;color:#0e7a5e;border:1px solid #b9dfd1;border-radius:999px;padding:4px 10px;font-size:12px;font-weight:700}",
-          "#Moeen-2-dashboard-status{font-size:12px;line-height:1.7;color:#6b7c93;margin:9px 0}",
+          ".Moeen-2-dashboard-warning{display:flex;align-items:flex-start;gap:7px;background:#fff8e8;border:1px solid #f1d59a;border-radius:9px;padding:7px 9px;margin:10px 0 8px;color:#7a4d05;font-size:11px;line-height:1.6}",
+          ".Moeen-2-dashboard-status-row{display:flex;align-items:flex-start;gap:7px;margin:7px 1px 10px}",
+          "#Moeen-2-dashboard-status-dot{width:7px;height:7px;border-radius:50%;background:#1a6fd4;margin-top:6px;flex:0 0 auto;animation:hadarPulse 1.6s ease-in-out infinite}",
+          "#Moeen-2-dashboard-status{font-size:12px;line-height:1.7;color:#6b7c93}",
           ".Moeen-2-resources{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:10px}",
+          ".Moeen-2-resources-label{font-size:11px;font-weight:800;color:#475569;margin-left:2px}",
           ".Moeen-2-res-pill{border:1px solid #d9e5e1;border-radius:999px;padding:5px 10px;background:#f8fbfa;font:700 11px Cairo,Segoe UI,Tahoma,sans-serif;cursor:pointer;color:#64748b}",
           ".Moeen-2-res-pill[data-on=true]{background:#eaf7f2;border-color:#8dccb5;color:#0e7a5e}",
           "#Moeen-2-dashboard-save{width:100%;border:0;border-radius:10px;background:linear-gradient(135deg,#0e7a5e,#075f49);color:#fff;padding:10px 14px;font:800 13px Cairo,Segoe UI,Tahoma,sans-serif}",
+          "#Moeen-2-dashboard-save[data-ready=true]{box-shadow:0 6px 18px rgba(14,122,94,.3)}",
+          "#hadar-presence-badge{position:fixed;right:18px;bottom:18px;z-index:2147483647;display:flex;align-items:center;gap:9px;border:1px solid rgba(14,122,94,.24);border-radius:999px;background:rgba(255,255,255,.96);box-shadow:0 9px 28px rgba(15,23,42,.18);padding:7px 12px 7px 8px;font-family:Cairo,Segoe UI,Tahoma,sans-serif;direction:rtl;color:#16324f;pointer-events:none;backdrop-filter:blur(12px)}",
+          "#hadar-presence-badge img{width:28px;height:28px;border-radius:8px}",
+          ".hadar-presence-copy{display:flex;flex-direction:column;line-height:1.2;text-align:right}",
+          ".hadar-presence-title{font-size:11px;font-weight:900;color:#0e7a5e}",
+          ".hadar-presence-sub{font-size:9px;color:#718096;margin-top:2px}",
+          ".hadar-presence-dot{width:7px;height:7px;border-radius:50%;background:#16a34a;animation:hadarPulse 1.8s ease-in-out infinite}",
+          "#hadar-presence-badge[data-state=login] .hadar-presence-dot{background:#d97706}",
+          "#hadar-presence-badge[data-state=expired] .hadar-presence-dot{background:#dc2626}",
+          "#hadar-presence-badge[data-state=checking] .hadar-presence-dot{background:#2563eb}",
+          "#hadar-subscription-exception{position:fixed;inset:0;z-index:2147483647;display:flex;align-items:center;justify-content:center;padding:20px;background:rgba(15,23,42,.5);font-family:Cairo,Segoe UI,Tahoma,sans-serif;direction:rtl}",
+          ".hadar-exception-card{position:relative;width:min(430px,100%);background:#fff;border:1px solid #fecaca;border-radius:18px;box-shadow:0 24px 70px rgba(15,23,42,.32);padding:24px;color:#16324f;text-align:right}",
+          ".hadar-exception-icon{width:48px;height:48px;display:grid;place-items:center;border-radius:14px;background:#fff1f2;color:#be123c;font-size:24px;margin-bottom:13px}",
+          ".hadar-exception-title{font-size:18px;font-weight:900;color:#991b1b;margin-bottom:7px}",
+          ".hadar-exception-message{font-size:13px;line-height:1.8;color:#64748b;margin-bottom:16px}",
+          ".hadar-exception-actions{display:flex;gap:8px;flex-wrap:wrap}",
+          ".hadar-exception-action{display:inline-flex;align-items:center;justify-content:center;border:0;border-radius:9px;padding:9px 14px;font:800 12px Cairo,Segoe UI,Tahoma,sans-serif;text-decoration:none;cursor:pointer}",
+          ".hadar-exception-subscribe{background:#0e7a5e;color:#fff}",
+          ".hadar-exception-retry{background:#eef2f7;color:#334155}",
+          ".hadar-exception-close{position:absolute;left:12px;top:10px;border:0;background:transparent;color:#94a3b8;font-size:22px;cursor:pointer}",
           ".Moeen-2-dashboard-select{position:relative!important;z-index:10!important;display:block!important;width:calc(100% - 12px)!important;min-width:120px!important;margin:7px 6px 3px!important;padding:6px!important;border:1px solid #8dccb5!important;border-radius:7px!important;background:#fff!important;color:#16324f!important;font:600 11px Cairo,Segoe UI,Tahoma,sans-serif!important;direction:rtl!important}"
         ].join("\n");
         (document.head || document.documentElement).appendChild(style);
       }
+    }
+
+    function removePresenceBadge() {
+      var badge = document.getElementById("hadar-presence-badge");
+      if (badge) badge.remove();
+    }
+
+    function getRemainingSubscriptionDays(endsAt, providedDays) {
+      if (typeof providedDays === "number" && Number.isFinite(providedDays) && providedDays > 0) {
+        return Math.ceil(providedDays);
+      }
+      var endTime = Date.parse(endsAt || "");
+      if (!Number.isFinite(endTime)) return null;
+      var remainingMs = endTime - Date.now();
+      return remainingMs > 0 ? Math.max(1, Math.ceil(remainingMs / 86400000)) : 0;
+    }
+
+    function getSubscriptionBadgeCopy(data) {
+      if (!data) {
+        return { title: "حضر يعمل", sub: "جاهز على منصة مدرستي", panel: "الاشتراك نشط" };
+      }
+
+      var usage = data.usage || {};
+      var remainingToday = usage.lessons_remaining_today;
+      var dailyCopy = remainingToday === null
+        ? "تحضير غير محدود اليوم"
+        : (typeof remainingToday === "number" ? remainingToday + " درس متبقٍ اليوم" : "الاشتراك نشط");
+
+      if (data.is_in_trial) {
+        var trialDays = getRemainingSubscriptionDays(data.trial_ends_at, data.trial_days_remaining);
+        var trialDaysCopy = trialDays === null ? "التجربة نشطة" : "متبقي " + trialDays + " يوم";
+        return {
+          title: "حضر • تجربة مجانية",
+          sub: trialDaysCopy + " • " + dailyCopy,
+          panel: trialDays === null ? "التجربة نشطة" : "التجربة: " + trialDays + " يوم"
+        };
+      }
+
+      var plan = data.plan || {};
+      var subscriptionDays = getRemainingSubscriptionDays(
+        data.subscription_ends_at,
+        data.subscription_days_remaining
+      );
+      var subscriptionDaysCopy = subscriptionDays === null
+        ? "الاشتراك نشط"
+        : "متبقي " + subscriptionDays + " يوم";
+      return {
+        title: "حضر • " + (plan.name || "اشتراك نشط"),
+        sub: subscriptionDaysCopy + " • " + dailyCopy,
+        panel: subscriptionDaysCopy
+      };
+    }
+
+    function updateDashboardSubscriptionBadge() {
+      var badge = document.getElementById("Moeen-2-subscription-badge");
+      if (!badge) return;
+      var copy = getSubscriptionBadgeCopy(subscriptionBadgeData);
+      badge.textContent = copy.panel;
+      badge.title = copy.sub;
+    }
+
+    function getSubscriptionExceptionCopy(result) {
+      var code = result && result.code;
+      if (code === "quota_exceeded") {
+        return {
+          title: "اكتمل حد التحضير اليومي",
+          message: (result && result.message) || "لا توجد تحضيرات متبقية في خطتك اليوم. يمكنك المحاولة مجدداً غداً أو ترقية الخطة.",
+          showSubscribe: true
+        };
+      }
+      if (code === "verification_failed") {
+        return {
+          title: "تعذّر التحقق من الاشتراك",
+          message: "لن يبدأ حضر التحضير حتى يتم التأكد من حالة اشتراكك. تحقق من الاتصال ثم أعد المحاولة.",
+          showSubscribe: false
+        };
+      }
+      if (code === "auth_required") {
+        return {
+          title: "يلزم تسجيل الدخول",
+          message: "سجّل الدخول من أيقونة إضافة حضر ثم أعد المحاولة.",
+          showSubscribe: false
+        };
+      }
+      return {
+        title: "التحضير غير متاح",
+        message: (result && result.message) || "لا توجد لديك خطة أو فترة تجريبية نشطة، أو أن اشتراكك انتهى. اشترك للمتابعة.",
+        showSubscribe: true
+      };
+    }
+
+    function showSubscriptionAccessException(result) {
+      subscriptionAccessAllowed = false;
+      subscriptionAccessFailure = result || { code: "subscription_required" };
+      injectPresenceBadge("expired");
+      updateDashboardCounter();
+      if (!isTopLevelPage()) return;
+
+      ensureHadarSurfaceStyles();
+      var existing = document.getElementById("hadar-subscription-exception");
+      if (existing) existing.remove();
+      var copy = getSubscriptionExceptionCopy(subscriptionAccessFailure);
+      var overlay = document.createElement("div");
+      overlay.id = "hadar-subscription-exception";
+      var card = document.createElement("section");
+      card.className = "hadar-exception-card";
+      var close = document.createElement("button");
+      close.type = "button";
+      close.className = "hadar-exception-close";
+      close.setAttribute("aria-label", "إغلاق");
+      close.textContent = "×";
+      close.addEventListener("click", function () { overlay.remove(); });
+      var icon = document.createElement("div");
+      icon.className = "hadar-exception-icon";
+      icon.textContent = "🔒";
+      var title = document.createElement("div");
+      title.className = "hadar-exception-title";
+      title.textContent = copy.title;
+      var message = document.createElement("div");
+      message.className = "hadar-exception-message";
+      message.textContent = copy.message;
+      var actions = document.createElement("div");
+      actions.className = "hadar-exception-actions";
+      var retry = document.createElement("button");
+      retry.type = "button";
+      retry.className = "hadar-exception-action hadar-exception-retry";
+      retry.textContent = "إعادة التحقق";
+      retry.addEventListener("click", function () { window.location.reload(); });
+      actions.appendChild(retry);
+      if (copy.showSubscribe) {
+        var subscribe = document.createElement("a");
+        subscribe.className = "hadar-exception-action hadar-exception-subscribe";
+        subscribe.href = "https://haderedu.com/checkout";
+        subscribe.target = "_blank";
+        subscribe.rel = "noopener noreferrer";
+        subscribe.textContent = "عرض الخطط";
+        actions.prepend(subscribe);
+      }
+      card.append(close, icon, title, message, actions);
+      overlay.appendChild(card);
+      document.documentElement.appendChild(overlay);
+    }
+
+    async function checkCurrentSubscriptionAccess() {
+      subscriptionAccessAllowed = false;
+      try {
+        var authData = await getLocal([AUTH_SESSION_KEY]);
+        var session = authData[AUTH_SESSION_KEY];
+        if (!session || !session.token) {
+          return { ok: false, code: "auth_required", message: "يلزم تسجيل الدخول إلى حضر." };
+        }
+
+        var response = await new Promise(function (resolve, reject) {
+          chrome.runtime.sendMessage({
+            action: "GET_SUBSCRIPTION_CURRENT",
+            token: session.token,
+            tokenType: session.tokenType || "Bearer"
+          }, function (result) {
+            if (chrome.runtime.lastError) {
+              reject(new Error(chrome.runtime.lastError.message));
+              return;
+            }
+            if (!result || !result.ok) {
+              reject(new Error(result && result.error ? result.error : "Subscription request failed"));
+              return;
+            }
+            resolve(result);
+          });
+        });
+
+        var data = response.data || {};
+        subscriptionBadgeData = data;
+        var activeTrial = data.is_in_trial === true && Boolean(data.plan);
+        var activePaidPlan = data.is_subscribed === true && Boolean(data.plan);
+        var trialEnd = Date.parse(data.trial_ends_at || "");
+        var paidEnd = Date.parse(data.subscription_ends_at || "");
+        if (activeTrial && Number.isFinite(trialEnd) && trialEnd <= Date.now()) activeTrial = false;
+        if (activePaidPlan && Number.isFinite(paidEnd) && paidEnd <= Date.now()) activePaidPlan = false;
+
+        if (response.status !== 200 || (!activeTrial && !activePaidPlan)) {
+          return {
+            ok: false,
+            code: data.code || (response.status === 401 ? "auth_required" : "subscription_required"),
+            message: data.message || "لا توجد لديك خطة أو فترة تجريبية نشطة، أو أن اشتراكك انتهى."
+          };
+        }
+
+        var remainingToday = data.usage && data.usage.lessons_remaining_today;
+        if (data.can_prepare_lesson === false || (typeof remainingToday === "number" && remainingToday <= 0)) {
+          return {
+            ok: false,
+            code: "quota_exceeded",
+            message: "اكتمل الحد اليومي للتحضير في خطتك. حاول مجدداً غداً أو قم بترقية الخطة."
+          };
+        }
+
+        subscriptionAccessAllowed = true;
+        subscriptionAccessFailure = null;
+        updateDashboardSubscriptionBadge();
+        return { ok: true, data: data };
+      } catch (error) {
+        console.warn("[حضر] Could not verify subscription:", error);
+        return { ok: false, code: "verification_failed", message: error && error.message };
+      }
+    }
+
+    function injectPresenceBadge(state) {
+      if (!isTopLevelPage()) return;
+      presenceBadgeState = state || presenceBadgeState || "active";
+      ensureHadarSurfaceStyles();
+      var badge = document.getElementById("hadar-presence-badge");
+      if (!badge) {
+        badge = document.createElement("aside");
+        badge.id = "hadar-presence-badge";
+        var logo = document.createElement("img");
+        logo.src = chrome.runtime.getURL("logo/logo-48.png");
+        logo.alt = "حضر";
+        var copy = document.createElement("span");
+        copy.className = "hadar-presence-copy";
+        var badgeTitle = document.createElement("span");
+        badgeTitle.className = "hadar-presence-title";
+        var badgeSub = document.createElement("span");
+        badgeSub.className = "hadar-presence-sub";
+        copy.append(badgeTitle, badgeSub);
+        var dot = document.createElement("span");
+        dot.className = "hadar-presence-dot";
+        badge.append(logo, copy, dot);
+        document.documentElement.appendChild(badge);
+      }
+      badge.dataset.state = presenceBadgeState;
+      var title = badge.querySelector(".hadar-presence-title");
+      var sub = badge.querySelector(".hadar-presence-sub");
+      if (presenceBadgeState === "login") {
+        title.textContent = "حضر موجود";
+        sub.textContent = "سجّل الدخول من أيقونة الإضافة";
+      } else if (presenceBadgeState === "expired") {
+        title.textContent = "حضر متوقف مؤقتاً";
+        sub.textContent = "يلزم تجديد الاشتراك";
+      } else if (presenceBadgeState === "checking") {
+        title.textContent = "حضر موجود";
+        sub.textContent = "جاري التحقق من الحساب";
+      } else {
+        var subscriptionCopy = getSubscriptionBadgeCopy(subscriptionBadgeData);
+        title.textContent = subscriptionCopy.title;
+        sub.textContent = subscriptionCopy.sub;
+      }
+    }
+
+    function removeDashboardUI() {
+      var panel = document.getElementById("Moeen-2-dashboard-panel");
+      if (panel) panel.remove();
+      document.querySelectorAll(".Moeen-2-dashboard-select").forEach(function (select) { select.remove(); });
+      dashboardInjected = false;
+      dashboardLessonCount = 0;
+      if (dashboardPollTimer) {
+        clearInterval(dashboardPollTimer);
+        dashboardPollTimer = null;
+      }
+    }
+
+    function injectDashboardPanel() {
+      if (!isTopLevelPage()) return;
+      removePresenceBadge();
+      ensureHadarSurfaceStyles();
+      if (document.getElementById("Moeen-2-dashboard-panel")) return;
 
       var panel = document.createElement("section");
       panel.id = "Moeen-2-dashboard-panel";
 
       var head = document.createElement("div");
       head.className = "Moeen-2-dashboard-head";
+      var brand = document.createElement("div");
+      brand.className = "Moeen-2-dashboard-brand";
+      var logo = document.createElement("img");
+      logo.className = "Moeen-2-dashboard-logo";
+      logo.src = chrome.runtime.getURL("logo/logo-48.png");
+      logo.alt = "حضر";
+      var titleGroup = document.createElement("div");
       var title = document.createElement("div");
       title.className = "Moeen-2-dashboard-title";
-      title.textContent = "حضر — التحضير الجماعي";
+      title.textContent = "حضر";
+      var subtitle = document.createElement("div");
+      subtitle.className = "Moeen-2-dashboard-subtitle";
+      subtitle.textContent = "لوحة التحضير الجماعي";
+      titleGroup.append(title, subtitle);
+      brand.append(logo, titleGroup);
       var badge = document.createElement("span");
       badge.className = "Moeen-2-dashboard-badge";
       badge.id = "Moeen-2-dashboard-counter";
       badge.textContent = "0 من 0";
-      head.append(title, badge);
+      var subscriptionBadge = document.createElement("span");
+      subscriptionBadge.className = "Moeen-2-dashboard-badge";
+      subscriptionBadge.id = "Moeen-2-subscription-badge";
+      head.append(brand, subscriptionBadge, badge);
+      updateDashboardSubscriptionBadge();
 
+      var warning = document.createElement("div");
+      warning.className = "Moeen-2-dashboard-warning";
+      warning.innerHTML = '<span>⚠️</span><span><strong>تنبيه:</strong> منصة مدرستي تسمح بإعداد الحصص لسبعة أيام مستقبلية فقط.</span>';
+
+      var statusRow = document.createElement("div");
+      statusRow.className = "Moeen-2-dashboard-status-row";
+      var statusDot = document.createElement("span");
+      statusDot.id = "Moeen-2-dashboard-status-dot";
       var status = document.createElement("div");
       status.id = "Moeen-2-dashboard-status";
       status.textContent = "جاري فحص الجدول الدراسي...";
+      statusRow.append(statusDot, status);
 
       var resources = document.createElement("div");
       resources.className = "Moeen-2-resources";
+      var resourcesLabel = document.createElement("span");
+      resourcesLabel.className = "Moeen-2-resources-label";
+      resourcesLabel.textContent = "الموارد المضافة:";
+      resources.appendChild(resourcesLabel);
       var resourceDefs = [
         { key: "activity", label: "نشاط" },
         { key: "homework", label: "واجب" },
@@ -1276,12 +1632,16 @@
           var pill = document.createElement("button");
           pill.type = "button";
           pill.className = "Moeen-2-res-pill";
-          pill.textContent = resource.label;
-          pill.dataset.on = String(getResourceEnabled(resource.key));
+          function renderPill() {
+            var isOn = getResourceEnabled(resource.key);
+            pill.dataset.on = String(isOn);
+            pill.textContent = isOn ? "✓ " + resource.label : resource.label;
+          }
+          renderPill();
           pill.addEventListener("click", function () {
             var enabled = !getResourceEnabled(resource.key);
             setResourceEnabled(resource.key, enabled);
-            pill.dataset.on = String(enabled);
+            renderPill();
             updateDashboardCounter();
           });
           resources.appendChild(pill);
@@ -1310,7 +1670,7 @@
         }
       });
 
-      panel.append(head, status, resources, saveBtn);
+      panel.append(head, warning, statusRow, resources, saveBtn);
       document.documentElement.appendChild(panel);
     }
     // ── Student Report Feature Stubs (to be implemented) ─────────────────────
@@ -1471,6 +1831,7 @@
     async function injectDashboardUI() {
       dashboardInjected = true;
       injectDashboardPanel();
+      updateDashboardSubscriptionBadge();
       void scanDashboardCards();
       if (!dashboardPollTimer) {
         dashboardPollTimer = setInterval(function () { void scanDashboardCards(); }, 1500);
@@ -1479,14 +1840,18 @@
 
     function startScheduleRouteWatcher() {
       if (scheduleRouteWatcher) return;
-      scheduleRouteWatcher = setInterval(function () {
+      function updateSurface() {
+        if (!isTopLevelPage()) return;
         if (detectPageState() === FLOW_STATES.DASHBOARD) {
+          removePresenceBadge();
           void injectDashboardUI();
           return;
         }
-        var panel = document.getElementById("Moeen-2-dashboard-panel");
-        if (panel) panel.remove();
-      }, 1000);
+        removeDashboardUI();
+        injectPresenceBadge("active");
+      }
+      updateSurface();
+      scheduleRouteWatcher = setInterval(updateSurface, 1000);
     }
     // ── Step 3: Silent (headless) lesson-plan saver ─────────────────────────────
     // Madrasati requires at least one Assignment/Activity/Enrichment resource bound
@@ -3915,16 +4280,26 @@
     }
 
     async function handleDashboardSave() {
+      updateDashboardStatus("جاري التحقق من الاشتراك...", "loading");
+      var accessResult = await checkCurrentSubscriptionAccess();
+      if (!accessResult.ok) {
+        showSubscriptionAccessException(accessResult);
+        updateDashboardStatus("❌ " + getSubscriptionExceptionCopy(accessResult).message, "error");
+        return;
+      }
+
       var allSelects = document.querySelectorAll('.Moeen-2-dashboard-select');
       var tokensToPrepare = [];
       var successCount = 0;
+      var queuedTokens = new Set();
 
       for (var select of allSelects) {
         if (!select.value || select.value === 'AI_AUTO') continue;
 
         var div = select.closest('div[data-data]') || select.parentElement;
         var lessonToken = select.getAttribute('data-lesson-token');
-        if (!lessonToken) continue;
+        if (!lessonToken || queuedTokens.has(lessonToken)) continue;
+        queuedTokens.add(lessonToken);
 
         var cell = div.closest('td') || div.parentElement;
 
@@ -6442,6 +6817,10 @@
       });
     }
     // ── Auth gate: block all features until teacher logs in ──────────────
+    function isHadarWorkflowPath() {
+      return /\/SchoolSchedule(?:\/|$)|\/Teacher\/(?:LessonPreparation|Preparation|Lessons)(?:\/|$)/i.test(window.location.pathname);
+    }
+
     async function checkAuthAndBoot() {
       const AUTH_SESSION_KEY = (globalThis.Moeen2_CONFIG && globalThis.Moeen2_CONFIG.AUTH_SESSION_KEY) || 'HADAR_AUTH';
       return new Promise((resolve) => {
@@ -6460,83 +6839,52 @@
       });
     }
 
+    injectPresenceBadge("checking");
     checkAuthAndBoot().then(isLoggedIn => {
       if (!isLoggedIn) {
-        // Show login required banner
-        const banner = document.createElement('div');
-        banner.id = 'hadar-auth-banner';
-        banner.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:999999;background:linear-gradient(135deg,#0056b3,#1676df);color:#fff;text-align:center;padding:12px 16px;font-family:system-ui,sans-serif;font-size:14px;direction:rtl;box-shadow:0 2px 12px rgba(0,86,179,0.3);';
-        banner.innerHTML = '🔒 <strong>حضر</strong> — يرجى تسجيل الدخول من أيقونة الامتداد لتفعيل الامتداد';
-        document.body && document.body.prepend ? document.body.prepend(banner) : (document.body ? document.body.insertBefore(banner, document.body.firstChild) : null);
+        injectPresenceBadge("login");
+        // Keep the prominent login reminder only on pages where حضر can act.
+        if (isTopLevelPage() && isHadarWorkflowPath() && !document.getElementById('hadar-auth-banner')) {
+          const banner = document.createElement('div');
+          banner.id = 'hadar-auth-banner';
+          banner.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:999999;background:linear-gradient(135deg,#0056b3,#1676df);color:#fff;text-align:center;padding:12px 16px;font-family:system-ui,sans-serif;font-size:14px;direction:rtl;box-shadow:0 2px 12px rgba(0,86,179,0.3);';
+          banner.innerHTML = '🔒 <strong>حضر</strong> — يرجى تسجيل الدخول من أيقونة الامتداد لتفعيل الامتداد';
+          document.body && document.body.prepend ? document.body.prepend(banner) : (document.body ? document.body.insertBefore(banner, document.body.firstChild) : null);
+        }
         return; // Stop all automation
       }
       // ── Authenticated: run boot ──
       // Fix #2: Check subscription/quota BEFORE starting any automation
       (async function boot() {
-        // 1. Check live subscription status from backend
-        var subscriptionOk = true;
-        var subscriptionCode = null;
-        try {
-          var authDataForSub = await getLocal([AUTH_SESSION_KEY]);
-          var sessionForSub = authDataForSub[AUTH_SESSION_KEY];
-          if (sessionForSub && sessionForSub.token) {
-            var subResult = await new Promise(function (resolve, reject) {
-              chrome.runtime.sendMessage({
-                action: "GET_SUBSCRIPTION_CURRENT",
-                token: sessionForSub.token,
-                tokenType: sessionForSub.tokenType || "Bearer"
-              }, function (response) {
-                if (chrome.runtime.lastError) {
-                  reject(new Error(chrome.runtime.lastError.message));
-                  return;
-                }
-                if (!response || !response.ok) {
-                  reject(new Error(response && response.error ? response.error : "Subscription request failed"));
-                  return;
-                }
-                resolve(response);
-              });
-            });
-            var subData = subResult.data;
-            subscriptionCode = subData && subData.code;
-            if (subResult.status === 402 || subscriptionCode === "trial_expired") {
-              subscriptionOk = false;
-            }
-          }
-        } catch (subErr) {
-          // Non-fatal: if network fails, allow extension to continue
-          console.warn("[حضر] Could not check subscription:", subErr);
-        }
-
-        // 2. If trial expired / no subscription → show upgrade banner and stop
-        if (!subscriptionOk) {
-          var expiredBanner = document.createElement('div');
-          expiredBanner.id = 'hadar-trial-expired-banner';
-          expiredBanner.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:999999;background:linear-gradient(135deg,#b03000,#e05010);color:#fff;text-align:center;padding:12px 16px;font-family:system-ui,sans-serif;font-size:14px;direction:rtl;box-shadow:0 2px 12px rgba(180,50,0,0.4);';
-          expiredBanner.innerHTML = '⏰ <strong>حضر</strong> — انتهت فترتك التجريبية. <a href="https://haderedu.com/checkout" target="_blank" style="color:#ffe;text-decoration:underline;font-weight:bold;">اشترك الآن ←</a>';
-          document.body && document.body.prepend ? document.body.prepend(expiredBanner) : (document.body ? document.body.insertBefore(expiredBanner, document.body.firstChild) : null);
+        // 1. Fail closed: preparation cannot start without a verified active
+        // trial or paid plan. Network/API failures are also blocked.
+        var subscriptionAccess = await checkCurrentSubscriptionAccess();
+        if (!subscriptionAccess.ok) {
+          showSubscriptionAccessException(subscriptionAccess);
           return; // Stop all automation
         }
 
         // 3. Auto-push Madrasati session to Moeen web app if it's open
-        try {
-          const cookies = document.cookie;
-          const schoolMatch = window.location.href.match(/[?&](?:SchoolId|schoolId|real_school_id)=([a-f0-9]{32})/i);
-          let schoolId = schoolMatch ? schoolMatch[1] : "";
-          if (!schoolId) {
-            const schoolEl = document.querySelector('[href*="SchoolId="], [src*="SchoolId="]');
-            if (schoolEl) {
-              const match = (schoolEl.getAttribute('href') || schoolEl.getAttribute('src')).match(/SchoolId=([a-f0-9]{32})/i);
-              if (match) schoolId = match[1];
+        if (isHadarWorkflowPath()) {
+          try {
+            const cookies = document.cookie;
+            const schoolMatch = window.location.href.match(/[?&](?:SchoolId|schoolId|real_school_id)=([a-f0-9]{32})/i);
+            let schoolId = schoolMatch ? schoolMatch[1] : "";
+            if (!schoolId) {
+              const schoolEl = document.querySelector('[href*="SchoolId="], [src*="SchoolId="]');
+              if (schoolEl) {
+                const match = (schoolEl.getAttribute('href') || schoolEl.getAttribute('src')).match(/SchoolId=([a-f0-9]{32})/i);
+                if (match) schoolId = match[1];
+              }
             }
+            chrome.runtime.sendMessage({
+              action: "PUSH_MADRASATI_SESSION",
+              session_cookie: cookies,
+              madrasati_school_id: schoolId
+            }, () => void chrome.runtime.lastError);
+          } catch (e) {
+            console.warn("[Moeen Extension] Failed to auto-push session:", e);
           }
-          chrome.runtime.sendMessage({
-            action: "PUSH_MADRASATI_SESSION",
-            session_cookie: cookies,
-            madrasati_school_id: schoolId
-          }, () => void chrome.runtime.lastError);
-        } catch (e) {
-          console.warn("[Moeen Extension] Failed to auto-push session:", e);
         }
 
         startScheduleRouteWatcher();
