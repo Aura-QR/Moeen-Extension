@@ -1199,6 +1199,23 @@
         }
       }
 
+      // Madrasati makes the entire lesson card clickable. Without isolating
+      // these events, opening/selecting this dropdown bubbles to the card and
+      // triggers its yes/no navigation warning. Stopping propagation preserves
+      // the select's native behavior because no default action is cancelled.
+      function isolateDropdownInteraction(event) {
+        event.stopPropagation();
+      }
+      [
+        "pointerdown", "pointerup",
+        "mousedown", "mouseup",
+        "click", "dblclick",
+        "touchstart", "touchend",
+        "keydown", "keyup"
+      ].forEach(function (eventName) {
+        select.addEventListener(eventName, isolateDropdownInteraction, true);
+      });
+
       select.addEventListener("focus", function () {
         select.style.borderColor = "#1a6fd4";
         select.style.boxShadow = "0 0 0 3px rgba(26,111,212,0.12)";
@@ -1207,7 +1224,8 @@
         select.style.borderColor = "rgba(26,111,212,0.35)";
         select.style.boxShadow = "none";
       });
-      select.addEventListener("change", function () {
+      select.addEventListener("change", function (event) {
+        event.stopPropagation();
         if (select.value) {
           select.style.borderColor = "#1a9448";
           select.style.background = "rgba(26,148,72,0.04)";
