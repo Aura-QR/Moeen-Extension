@@ -1093,6 +1093,11 @@
     var subscriptionAccessAllowed = false;
     var subscriptionAccessFailure = null;
     var dashboardSelectionCache = new Map();
+    // One AI request per lesson at a time. This lets selection-time prefetch and
+    // batch-time prefetch share the same promise instead of calling n8n twice.
+    var aiPrefetchInFlight = new Map();
+    var aiPrefetchActiveCount = 0;
+    var aiPrefetchWaiters = [];
 
     async function fetchLessonTreeOptions(subjectId, subjectName) {
       var optionsArray = [];
@@ -1245,6 +1250,21 @@
             sibling.value = select.value;
             sibling.style.borderColor = select.value ? "#1a9448" : "rgba(26,111,212,0.35)";
             sibling.style.background = select.value ? "rgba(26,148,72,0.04)" : "#fff";
+          });
+        }
+
+        // Start preparing the generated lesson text as soon as the teacher
+        // selects a lesson. In most cases it will already be cached by the time
+        // "prepare" is clicked. The batch path below safely joins this request.
+        if (subscriptionAccessAllowed && select.value && select.value !== "AI_AUTO") {
+          var selectedDiv = select.closest('div[data-data]') || select.parentElement;
+          void prefetchAILessonDataForCard({
+            select: select,
+            div: selectedDiv,
+            selection: {
+              treeValue: select.value,
+              treeText: select.options[select.selectedIndex].text
+            }
           });
         }
         updateDashboardCounter();
@@ -3324,6 +3344,7 @@
       var _diffWaitSchedule = [1000, 2000, 4000, 4000, 4000];
       var _diffAttempts = 0;
       var _diffSucceeded = false;
+      var _confirmedAfterSnapshot = null;
       if (_shouldRunActivity) {
         for (var _attemptIdx = 0; _attemptIdx < _diffWaitSchedule.length; _attemptIdx++) {
           await new Promise(r => setTimeout(r, _diffWaitSchedule[_attemptIdx]));
@@ -3334,6 +3355,7 @@
             if (_probeNewIds.length > 0) {
               console.log('[Moeen-2] ✅ DB sync probe attempt', _diffAttempts, 'detected', _probeNewIds.length, 'new project ID(s) after', _diffWaitSchedule.slice(0, _attemptIdx + 1).reduce(function (a, b) { return a + b; }, 0), 'ms total wait — proceeding to single Tier-A DIFF below');
               _diffSucceeded = true;
+              _confirmedAfterSnapshot = _probeSnapshot;
               break;
             } else {
               console.warn('[Moeen-2] ⏳ DB sync probe attempt', _diffAttempts, '— no new ID yet (size=' + _probeSnapshot.size + ', baseline=' + beforeSnapshot.size + '). Will retry.');
@@ -3477,10 +3499,11 @@
         // ─── Tier A: DIFF-BASED ProjectId resolution (single-attempt version).
         //
         //   We already captured `beforeSnapshot` BEFORE silentCreateActivityResource.
-        //   We waited 2000ms for DB sync. Now we take `afterSnapshot` and diff.
+        //   DB polling already produced a confirmed `afterSnapshot`; reuse it
+        //   instead of making the same network request a second time.
         //   The new entry IS our newly-created Activity's ProjectId.
         try {
-          const afterSnapshot = await fetchProjectsListSnapshot('after-create');
+          const afterSnapshot = _confirmedAfterSnapshot || await fetchProjectsListSnapshot('after-create');
           const newIds = [...afterSnapshot].filter(id => !beforeSnapshot.has(id));
 
           if (newIds.length === 1) {
@@ -3621,8 +3644,12 @@
         return false;
       }
 
-      // Increased buffer to 15000ms to ensure the DB commits the activity before SaveLastLessonPlan runs
-      await new Promise(r => setTimeout(r, 2000));
+      // The successful diff probe proves that Madrasati can already read the
+      // committed Activity. Keep a small fallback buffer only when all probes
+      // failed; otherwise this fixed wait costs two seconds per lesson for no gain.
+      if (_shouldRunActivity && !_diffSucceeded) {
+        await new Promise(r => setTimeout(r, 2000));
+      }
 
       // 4. Build the SaveLastLessonPlan payload.
       // Prefer mlutiFormData (has NUMERIC SchoolId + TimeTableId from server).
@@ -4187,29 +4214,23 @@
       return result;
     }
 
+    function getAILessonIdFromCardItem(cardItem) {
+      try {
+        var treeValue = cardItem && cardItem.selection && cardItem.selection.treeValue;
+        if (treeValue && typeof treeValue === 'string') {
+          var parts = treeValue.split(',');
+          if (parts.length >= 3) return String(parts[2]).trim();
+        }
+      } catch (err) {
+        console.warn('[Moeen-2-AI] prefetch: error parsing treeValue:', err && err.message);
+      }
+      return '';
+    }
+
     // ── Prefetch AI content for a single lesson card and cache in chrome.storage.local ──
     // Returns the AI object (5 fields) or null on failure. Cache key: Moeen-2_ai_<lessonId>.
-    async function prefetchAILessonDataForCard(cardItem) {
+    async function runAILessonPrefetch(cardItem, lessonId) {
       try {
-        // Resolve lessonId the SAME WAY silentPrepareLesson does — by parsing
-        // selection.treeValue ("subjectId,chapterId,lessonId"). Direct `.lessonId`
-        // is NOT a property on selection.
-        var lessonId = '';
-        try {
-          var tv = cardItem && cardItem.selection && cardItem.selection.treeValue;
-          if (tv && typeof tv === 'string') {
-            var parts = tv.split(',');
-            if (parts.length >= 3) {
-              lessonId = String(parts[2]).trim();
-            }
-          }
-        } catch (e) {
-          console.warn('[Moeen-2-AI] prefetch: error parsing treeValue:', e && e.message);
-        }
-        if (!lessonId) {
-          console.warn('[Moeen-2-AI] prefetch skipped — could not parse lessonId from treeValue:', cardItem && cardItem.selection && cardItem.selection.treeValue);
-          return null;
-        }
         console.log('[Moeen-2-AI] prefetch: resolved lessonId', lessonId, 'from treeValue');
         var cacheKey = 'Moeen-2_ai_' + lessonId;
 
@@ -4309,6 +4330,78 @@
       }
     }
 
+    async function runWithAIPrefetchSlot(task) {
+      if (aiPrefetchActiveCount >= 3) {
+        await new Promise(function (resolve) { aiPrefetchWaiters.push(resolve); });
+      } else {
+        aiPrefetchActiveCount++;
+      }
+      try {
+        return await task();
+      } finally {
+        var wakeNext = aiPrefetchWaiters.shift();
+        if (wakeNext) {
+          // Transfer this occupied slot directly to the next waiter.
+          wakeNext();
+        } else {
+          aiPrefetchActiveCount--;
+        }
+      }
+    }
+
+    async function prefetchAILessonDataForCard(cardItem) {
+      var lessonId = getAILessonIdFromCardItem(cardItem);
+      if (!lessonId) {
+        console.warn('[Moeen-2-AI] prefetch skipped — could not parse lessonId from treeValue:', cardItem && cardItem.selection && cardItem.selection.treeValue);
+        return null;
+      }
+
+      var runningRequest = aiPrefetchInFlight.get(lessonId);
+      if (runningRequest) {
+        console.log('[Moeen-2-AI] joining in-flight prefetch for', lessonId);
+        return runningRequest;
+      }
+
+      var prefetchPromise = runWithAIPrefetchSlot(function () {
+        return runAILessonPrefetch(cardItem, lessonId);
+      });
+      aiPrefetchInFlight.set(lessonId, prefetchPromise);
+      try {
+        return await prefetchPromise;
+      } finally {
+        if (aiPrefetchInFlight.get(lessonId) === prefetchPromise) {
+          aiPrefetchInFlight.delete(lessonId);
+        }
+      }
+    }
+
+    function scheduleWithConcurrency(items, limit, worker) {
+      var nextIndex = 0;
+      var workerCount = Math.min(Math.max(1, limit), items.length);
+      var taskSlots = items.map(function () {
+        var resolveTask;
+        var promise = new Promise(function (resolve) { resolveTask = resolve; });
+        return { promise: promise, resolve: resolveTask };
+      });
+
+      async function runWorker() {
+        while (true) {
+          var index = nextIndex++;
+          if (index >= items.length) return;
+          var result = null;
+          try {
+            result = await worker(items[index], index);
+          } catch (err) {
+            console.warn('[Moeen-2] background preparation failed:', err && err.message);
+          }
+          taskSlots[index].resolve(result);
+        }
+      }
+
+      for (var i = 0; i < workerCount; i++) void runWorker();
+      return taskSlots.map(function (slot) { return slot.promise; });
+    }
+
     async function handleDashboardSave() {
       updateDashboardStatus("جاري التحقق من الاشتراك...", "loading");
       var accessResult = await checkCurrentSubscriptionAccess();
@@ -4389,6 +4482,18 @@
         updateDashboardStatus("❌ خطأ داخلي — يرجى إعادة تحميل الصفحة وإعادة المحاولة", "error");
         return;
       }
+
+      // Generate up to three lessons at once. Madrasati writes remain ordered
+      // below because their before/after ProjectId snapshots must never overlap.
+      // This is a pipeline: saving lesson 1 starts as soon as its AI data is
+      // ready while lessons 2+ continue generating in the background.
+      updateDashboardStatus("⚡ جاري تجهيز المحتوى بالتوازي قبل الحفظ...", "loading");
+      var aiPrefetchPromises = scheduleWithConcurrency(
+        tokensToPrepare,
+        3,
+        function (item) { return prefetchAILessonDataForCard(item); }
+      );
+
       var _saveIdx = 0;
       for (var item of tokensToPrepare) {
         _saveIdx++;
@@ -4397,9 +4502,9 @@
           "loading"
         );
         try {
-          // Prefetch AI lesson data from n8n webhook and cache it
-          // so silentPrepareLesson finds the cache and uses AI-generated texts
-          await prefetchAILessonDataForCard(item);
+          // Join the already-running background task for this lesson. Usually
+          // this resolves immediately because selection-time prefetch cached it.
+          await aiPrefetchPromises[_saveIdx - 1];
 
           var success = await silentPrepareLesson(item.token, item.selection, item.subjectId, item.realSchoolId, item.div);
 
