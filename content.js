@@ -57,6 +57,10 @@
     var AI_LESSON_DATA_KEY = "aiLessonData";
     var AUTOMATION_MODE_KEY = "automationMode";
     var AUTH_SESSION_KEY = CONFIG.AUTH_SESSION_KEY || "HADAR_AUTH";
+    // The owner explicitly approved the secure Madrasati session-transfer flow.
+    // Backend mode lets preparation continue after the schedule tab is closed.
+    var BACKEND_PREPARATION_ENABLED = true;
+    var BACKEND_PREPARATION_BATCH_KEY = "HADAR_BACKEND_PREPARATION_BATCH";
     var _lastPreparedPayload = null;
     var _lastLessonContext = null;
     var N8N_AI_WEBHOOK_URL = "https://n8n.qraura.shop/webhook/mo3een-ai-generator2";
@@ -1098,6 +1102,7 @@
     var aiPrefetchInFlight = new Map();
     var aiPrefetchActiveCount = 0;
     var aiPrefetchWaiters = [];
+    var backendBatchPolling = false;
 
     async function fetchLessonTreeOptions(subjectId, subjectName) {
       var optionsArray = [];
@@ -1256,7 +1261,7 @@
         // Start preparing the generated lesson text as soon as the teacher
         // selects a lesson. In most cases it will already be cached by the time
         // "prepare" is clicked. The batch path below safely joins this request.
-        if (subscriptionAccessAllowed && select.value && select.value !== "AI_AUTO") {
+        if (!BACKEND_PREPARATION_ENABLED && subscriptionAccessAllowed && select.value && select.value !== "AI_AUTO") {
           var selectedDiv = select.closest('div[data-data]') || select.parentElement;
           void prefetchAILessonDataForCard({
             select: select,
@@ -4402,6 +4407,245 @@
       return taskSlots.map(function (slot) { return slot.promise; });
     }
 
+    function getBackendSelectedModules() {
+      var activity = getResourceEnabled('activity');
+      var homework = getResourceEnabled('homework');
+      var exam = getResourceEnabled('exam');
+      var enrichment = getResourceEnabled('enrichment');
+      var modules = [];
+      if (activity || (!homework && !exam && !enrichment)) modules.push('assignment');
+      if (homework) modules.push('homework');
+      if (exam) modules.push('exam');
+      if (enrichment) modules.push('enrichment');
+      return modules;
+    }
+
+    function buildBackendPreparationPayload(item) {
+      var ids = String(item.selection && item.selection.treeValue || '').split(',');
+      if (ids.length < 3) throw new Error('تعذر قراءة معرف الدرس المختار.');
+
+      var cell = item.div.closest('td') || item.div.parentElement;
+      var anchor = cell ? cell.querySelector('a[href*="ManageLecture"]') : null;
+      var manageUrl = anchor && anchor.href ? anchor.href : '';
+      var classroomId = item.div.getAttribute('data-class-id')
+        || item.div.getAttribute('data-classroom-id')
+        || '';
+      var timeTableId = item.div.getAttribute('data-timetable-id')
+        || item.div.getAttribute('data-time-table-id')
+        || item.div.getAttribute('data-lecture-id')
+        || '';
+
+      if (manageUrl) {
+        var parsed = new URL(manageUrl, window.location.origin);
+        classroomId = parsed.searchParams.get('classroomId') || classroomId;
+        timeTableId = parsed.searchParams.get('lectureId') || parsed.searchParams.get('TimeTableId') || timeTableId;
+      } else if (item.realSchoolId && classroomId && item.token) {
+        var generatedUrl = new URL('/SchoolSchedule/Schedule/ManageLecture', window.location.origin);
+        generatedUrl.searchParams.set('SchoolId', item.realSchoolId);
+        generatedUrl.searchParams.set('lectureId', item.token);
+        generatedUrl.searchParams.set('subjectId', item.subjectId || ids[0]);
+        generatedUrl.searchParams.set('classroomId', classroomId);
+        manageUrl = generatedUrl.toString();
+      }
+
+      // Green cards expose an encrypted data-data token. MlutiLessonPlan uses
+      // it to recover the canonical numeric SchoolId and TimeTableId.
+      var encryptedToken = String(item.token || '').length >= 16 ? String(item.token) : null;
+      timeTableId = timeTableId || String(item.token || '');
+      if (!classroomId || !timeTableId) {
+        throw new Error('بيانات الفصل أو الحصة ناقصة. أعد تحميل جدول مدرستي ثم حاول مجدداً.');
+      }
+
+      return {
+        subject_id: Number(ids[0]),
+        chapter_id: Number(ids[1]),
+        lesson_madrasati_id: String(ids[2]),
+        lesson_title: String(item.selection.treeText || '').trim().replace(/:$/, '').trim(),
+        classroom_id: String(classroomId),
+        school_madrasati_id: String(item.realSchoolId || ''),
+        time_table_id: String(timeTableId).slice(0, 255),
+        encrypted_token: encryptedToken,
+        manage_lecture_url: manageUrl || null,
+        selected_modules: getBackendSelectedModules()
+      };
+    }
+
+    function getBackendResponseMessage(result, fallback) {
+      return result && result.data && (result.data.message || result.data.error)
+        || result && result.error
+        || fallback;
+    }
+
+    async function runBackendPreparationBatch(tokensToPrepare) {
+      var authData = await getLocal([AUTH_SESSION_KEY]);
+      var authSession = authData[AUTH_SESSION_KEY];
+      if (!authSession || !authSession.token) {
+        throw new Error('سجّل الدخول إلى حضر من أيقونة الإضافة أولاً.');
+      }
+
+      var schoolIds = Array.from(new Set(tokensToPrepare.map(function (item) {
+        return String(item.realSchoolId || '').toUpperCase();
+      }).filter(Boolean)));
+      if (schoolIds.length !== 1) {
+        throw new Error('يجب تحضير حصص مدرسة واحدة في كل دفعة. افتح جدول المدرسة المطلوبة ثم أعد المحاولة.');
+      }
+
+      updateDashboardStatus('🔐 جاري تأمين جلسة مدرستي مع الخادم...', 'loading');
+      var syncResult = await sendRuntimeMessage({
+        action: 'SYNC_MADRASATI_SESSION_TO_BACKEND',
+        token: authSession.token,
+        tokenType: authSession.tokenType || 'Bearer',
+        schoolId: schoolIds[0],
+        csrfToken: getCsrfToken()
+      });
+      if (!syncResult || !syncResult.ok) {
+        throw new Error(getBackendResponseMessage(syncResult, 'تعذر ربط جلسة مدرستي بالخادم. سجّل الدخول إلى مدرستي وأعد المحاولة.'));
+      }
+
+      var lessons = tokensToPrepare.map(buildBackendPreparationPayload);
+      updateDashboardStatus('☁️ تم إرسال ' + lessons.length + ' حصة للتحضير في الخلفية...', 'loading');
+      var existingBatchData = await getLocal([BACKEND_PREPARATION_BATCH_KEY]);
+      var existingBatch = existingBatchData[BACKEND_PREPARATION_BATCH_KEY];
+      var clientRequestId = existingBatch && !existingBatch.preparationIds?.length
+        && Date.now() - Number(existingBatch.createdAt || 0) < 10 * 60 * 1000
+        ? existingBatch.clientRequestId
+        : null;
+      if (!clientRequestId) {
+        clientRequestId = (globalThis.crypto && typeof globalThis.crypto.randomUUID === 'function')
+          ? globalThis.crypto.randomUUID()
+          : 'batch-' + Date.now() + '-' + Math.random().toString(36).slice(2);
+      }
+      await setLocal({
+        [BACKEND_PREPARATION_BATCH_KEY]: {
+          clientRequestId: clientRequestId,
+          preparationIds: [],
+          createdAt: Date.now()
+        }
+      });
+      var startResult = await sendRuntimeMessage({
+        action: 'START_BACKEND_PREPARATION',
+        token: authSession.token,
+        tokenType: authSession.tokenType || 'Bearer',
+        payload: { client_request_id: clientRequestId, lessons: lessons }
+      });
+      if (!startResult || !startResult.ok) {
+        throw new Error(getBackendResponseMessage(startResult, 'تعذر بدء التحضير على الخادم.'));
+      }
+
+      var preparationIds = startResult.data && startResult.data.preparation_ids || [];
+      if (!preparationIds.length) throw new Error('لم يُرجع الخادم أرقام عمليات التحضير.');
+      await setLocal({
+        [BACKEND_PREPARATION_BATCH_KEY]: {
+          clientRequestId: clientRequestId,
+          preparationIds: preparationIds,
+          createdAt: Date.now()
+        }
+      });
+
+      backendBatchPolling = true;
+      var pending = new Set(preparationIds.map(String));
+      var succeeded = 0;
+      var failures = [];
+      var deadline = Date.now() + 30 * 60 * 1000;
+
+      while (pending.size > 0 && Date.now() < deadline) {
+        var idsThisRound = Array.from(pending);
+        var statuses = await Promise.all(idsThisRound.map(function (id) {
+          return sendRuntimeMessage({
+            action: 'GET_BACKEND_PREPARATION_STATUS',
+            token: authSession.token,
+            tokenType: authSession.tokenType || 'Bearer',
+            preparationId: id
+          });
+        }));
+
+        statuses.forEach(function (result, index) {
+          if (!result || !result.ok || !result.data) return;
+          var id = idsThisRound[index];
+          if (result.data.status === 'done') {
+            pending.delete(id);
+            succeeded++;
+          } else if (result.data.status === 'failed') {
+            pending.delete(id);
+            failures.push(result.data.error || ('فشلت الحصة رقم ' + id));
+          }
+        });
+
+        updateDashboardStatus(
+          '☁️ التحضير مستمر على الخادم — اكتمل ' + (succeeded + failures.length) + ' من ' + preparationIds.length,
+          failures.length ? 'warning' : 'loading'
+        );
+        if (pending.size > 0) await new Promise(function (resolve) { setTimeout(resolve, 3000); });
+      }
+
+      if (pending.size > 0) {
+        backendBatchPolling = false;
+        updateDashboardStatus('☁️ التحضير ما زال مستمراً على الخادم ويمكنك إغلاق الصفحة بأمان.', 'loading');
+        return { succeeded: succeeded, failed: failures.length, pending: pending.size };
+      }
+
+      await removeLocal([BACKEND_PREPARATION_BATCH_KEY]);
+      backendBatchPolling = false;
+      return { succeeded: succeeded, failed: failures.length, pending: 0, errors: failures };
+    }
+
+    async function resumeBackendPreparationBatchIfNeeded() {
+      if (!BACKEND_PREPARATION_ENABLED || backendBatchPolling) return;
+      var stored = await getLocal([BACKEND_PREPARATION_BATCH_KEY, AUTH_SESSION_KEY]);
+      var batch = stored[BACKEND_PREPARATION_BATCH_KEY];
+      var authSession = stored[AUTH_SESSION_KEY];
+      var preparationIds = batch && Array.isArray(batch.preparationIds) ? batch.preparationIds : [];
+      if (!preparationIds.length || !authSession || !authSession.token) return;
+
+      backendBatchPolling = true;
+      try {
+        updateDashboardStatus('☁️ استئناف متابعة التحضير الجاري على الخادم...', 'loading');
+        var pending = new Set(preparationIds.map(String));
+        var succeeded = 0;
+        var failed = 0;
+        var deadline = Date.now() + 30 * 60 * 1000;
+
+        while (pending.size && Date.now() < deadline) {
+          var ids = Array.from(pending);
+          var results = await Promise.all(ids.map(function (id) {
+            return sendRuntimeMessage({
+              action: 'GET_BACKEND_PREPARATION_STATUS',
+              token: authSession.token,
+              tokenType: authSession.tokenType || 'Bearer',
+              preparationId: id
+            });
+          }));
+          results.forEach(function (result, index) {
+            if (!result || !result.ok || !result.data) return;
+            if (result.data.status === 'done') {
+              pending.delete(ids[index]);
+              succeeded++;
+            } else if (result.data.status === 'failed') {
+              pending.delete(ids[index]);
+              failed++;
+            }
+          });
+
+          updateDashboardStatus(
+            '☁️ التحضير على الخادم — اكتمل ' + (succeeded + failed) + ' من ' + preparationIds.length,
+            failed ? 'warning' : 'loading'
+          );
+          if (pending.size) await new Promise(function (resolve) { setTimeout(resolve, 3000); });
+        }
+
+        if (!pending.size) {
+          await removeLocal([BACKEND_PREPARATION_BATCH_KEY]);
+          if (failed === 0) {
+            updateDashboardStatus('✅ اكتمل تحضير ' + succeeded + ' حصة على الخادم.', 'success');
+          } else {
+            updateDashboardStatus('⚠️ اكتملت الدفعة: نجح ' + succeeded + ' وفشل ' + failed + '.', 'warning');
+          }
+        }
+      } finally {
+        backendBatchPolling = false;
+      }
+    }
+
     async function handleDashboardSave() {
       updateDashboardStatus("جاري التحقق من الاشتراك...", "loading");
       var accessResult = await checkCurrentSubscriptionAccess();
@@ -4480,6 +4724,23 @@
       // data-class-id + lesson token), so the iframe legacy path is no longer needed.
       if (typeof silentPrepareLesson !== 'function') {
         updateDashboardStatus("❌ خطأ داخلي — يرجى إعادة تحميل الصفحة وإعادة المحاولة", "error");
+        return;
+      }
+
+      if (BACKEND_PREPARATION_ENABLED) {
+        try {
+          var backendResult = await runBackendPreparationBatch(tokensToPrepare);
+          if (backendResult.pending > 0) return;
+          if (backendResult.failed === 0) {
+            updateDashboardStatus('✅ تم تحضير ' + backendResult.succeeded + ' حصة من الخادم بنجاح! جاري تحديث الجدول...', 'success');
+            setTimeout(function () { window.location.reload(); }, 2000);
+          } else {
+            updateDashboardStatus('⚠️ تم تحضير ' + backendResult.succeeded + ' حصة، وفشلت ' + backendResult.failed + '. راجع سجل التحضير.', 'warning');
+          }
+        } catch (error) {
+          console.error('[حضر] Backend preparation failed:', error);
+          updateDashboardStatus('❌ ' + (error && error.message || 'تعذر التحضير على الخادم.'), 'error');
+        }
         return;
       }
 
@@ -7023,6 +7284,9 @@
         }
 
         startScheduleRouteWatcher();
+        if (BACKEND_PREPARATION_ENABLED && isHadarWorkflowPath()) {
+          setTimeout(function () { void resumeBackendPreparationBatchIfNeeded(); }, 1500);
+        }
 
         // Fix #1: Removed early return — boot now continues into full automation logic
         var bootPageState = detectPageState();

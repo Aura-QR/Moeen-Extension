@@ -6,6 +6,44 @@
 
 importScripts('shared/constants.js');
 
+const HADAR_API_BASE = (globalThis.Moeen2_CONFIG?.API_BASE_URL || 'https://api.haderedu.com/api').replace(/\/+$/, '');
+
+async function callHadarApi(path, options, token, tokenType) {
+  const response = await fetch(HADAR_API_BASE + path, {
+    ...(options || {}),
+    headers: {
+      'Accept': 'application/json',
+      ...((options && options.body) ? { 'Content-Type': 'application/json' } : {}),
+      ...((options && options.headers) || {}),
+      'Authorization': `${tokenType || 'Bearer'} ${token || ''}`
+    }
+  });
+  let data = null;
+  try { data = await response.json(); } catch (_) { }
+  return { ok: response.ok, status: response.status, data };
+}
+
+function isRequiredMadrasatiCookie(name) {
+  return name === '.AspNetCore.Cookies'
+    || name.startsWith('.AspNetCore.Antiforgery.')
+    || name === 'ARRAffinity'
+    || name === 'ARRAffinitySameSite'
+    || name === 'CLATS'
+    || name === 'AcademicYearId';
+}
+
+async function readRequiredMadrasatiCookies() {
+  const allCookies = await chrome.cookies.getAll({ url: 'https://schools.madrasati.sa/' });
+  const cookies = allCookies
+    .filter((cookie) => cookie.name && cookie.value && isRequiredMadrasatiCookie(cookie.name))
+    .map((cookie) => ({ name: cookie.name, value: cookie.value }));
+
+  if (!cookies.some((cookie) => cookie.name === '.AspNetCore.Cookies')) {
+    throw new Error('Madrasati authentication cookie was not found. Sign in to Madrasati and try again.');
+  }
+  return cookies;
+}
+
 // ============================================================================
 // 1. DATABASE MANAGER (The New Engine)
 // ============================================================================
@@ -235,9 +273,54 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
   // Content scripts inherit the page origin for CORS, so authenticated API
   // requests must be proxied through the extension service worker.
+  if (msg?.action === 'SYNC_MADRASATI_SESSION_TO_BACKEND') {
+    (async () => {
+      let cookies = [];
+      try {
+        if (!msg.token || !/^[a-f0-9]{32}$/i.test(String(msg.schoolId || ''))) {
+          throw new Error('Authenticated Hader session and a valid Madrasati school ID are required.');
+        }
+        cookies = await readRequiredMadrasatiCookies();
+        const result = await callHadarApi('/madrasati/connect', {
+          method: 'POST',
+          headers: { 'X-Hader-Session-Bridge': 'extension-v1' },
+          body: JSON.stringify({
+            cookies,
+            csrf_token: msg.csrfToken || null,
+            madrasati_school_id: msg.schoolId
+          })
+        }, msg.token, msg.tokenType);
+        sendResponse(result);
+      } catch (error) {
+        sendResponse({ ok: false, status: 0, error: error?.message || String(error) });
+      } finally {
+        cookies.length = 0;
+      }
+    })();
+    return true;
+  }
+
+  if (msg?.action === 'START_BACKEND_PREPARATION') {
+    callHadarApi('/prepare/bulk', {
+      method: 'POST',
+      body: JSON.stringify(msg.payload || {})
+    }, msg.token, msg.tokenType)
+      .then(sendResponse)
+      .catch((error) => sendResponse({ ok: false, status: 0, error: error?.message || String(error) }));
+    return true;
+  }
+
+  if (msg?.action === 'GET_BACKEND_PREPARATION_STATUS') {
+    callHadarApi('/prepare/' + encodeURIComponent(msg.preparationId) + '/status', {
+      method: 'GET'
+    }, msg.token, msg.tokenType)
+      .then(sendResponse)
+      .catch((error) => sendResponse({ ok: false, status: 0, error: error?.message || String(error) }));
+    return true;
+  }
+
   if (msg?.action === 'GET_SUBSCRIPTION_CURRENT') {
-    const apiBase = (globalThis.Moeen2_CONFIG?.API_BASE_URL || 'https://api.haderedu.com/api').replace(/\/+$/, '');
-    fetch(apiBase + '/subscription/current', {
+    fetch(HADAR_API_BASE + '/subscription/current', {
       headers: {
         'Accept': 'application/json',
         'Authorization': `${msg.tokenType || 'Bearer'} ${msg.token || ''}`
