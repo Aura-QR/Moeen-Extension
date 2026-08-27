@@ -23,25 +23,133 @@ async function callHadarApi(path, options, token, tokenType) {
   return { ok: response.ok, status: response.status, data };
 }
 
-function isRequiredMadrasatiCookie(name) {
-  return name === '.AspNetCore.Cookies'
-    || name.startsWith('.AspNetCore.Antiforgery.')
-    || name === 'ARRAffinity'
-    || name === 'ARRAffinitySameSite'
-    || name === 'CLATS'
-    || name === 'AcademicYearId';
+function isMadrasatiAuthCookie(name) {
+  const normalized = String(name || '').trim().toLowerCase();
+  return normalized === '.aspnetcore.cookies'
+    || /^\.aspnetcore\.cookiesc\d+$/.test(normalized)
+    || normalized === '.aspnetcore.identity.application'
+    || /^\.aspnetcore\.identity\.applicationc\d+$/.test(normalized);
 }
 
-async function readRequiredMadrasatiCookies() {
-  const allCookies = await chrome.cookies.getAll({ url: 'https://schools.madrasati.sa/' });
-  const cookies = allCookies
-    .filter((cookie) => cookie.name && cookie.value && isRequiredMadrasatiCookie(cookie.name))
-    .map((cookie) => ({ name: cookie.name, value: cookie.value }));
+function isForwardableMadrasatiCookie(name, value) {
+  const rawName = typeof name === 'string' ? name : '';
+  const rawValue = typeof value === 'string' ? value : '';
+  const lowerName = rawName.toLowerCase();
+  return !!lowerName
+    && rawName.length <= 128
+    && !!rawValue
+    && rawValue.length <= 16384
+    && !lowerName.startsWith('_ga')
+    && !lowerName.startsWith('_gid')
+    && !lowerName.startsWith('_gat')
+    && !lowerName.startsWith('_gcl')
+    && !lowerName.startsWith('_fbp')
+    && !lowerName.startsWith('_clck')
+    && !lowerName.startsWith('_hj');
+}
 
-  if (!cookies.some((cookie) => cookie.name === '.AspNetCore.Cookies')) {
-    throw new Error('Madrasati authentication cookie was not found. Sign in to Madrasati and try again.');
+function getMadrasatiCookieUrls(preferredUrl) {
+  const urls = [];
+  try {
+    const parsed = new URL(preferredUrl || '');
+    if (
+      parsed.protocol === 'https:'
+      && (parsed.hostname === 'schools.madrasati.sa' || parsed.hostname === 'external.madrasati.sa')
+    ) {
+      urls.push(parsed.href);
+      urls.push(parsed.origin + '/');
+    }
+  } catch (_) { }
+
+  for (const url of ['https://schools.madrasati.sa/', 'https://external.madrasati.sa/']) {
+    if (!urls.includes(url)) urls.push(url);
   }
-  return cookies;
+  return urls;
+}
+
+async function readRequiredMadrasatiCookies(preferredUrl) {
+  const attempts = [];
+  let bestCookies = [];
+  const queries = getMadrasatiCookieUrls(preferredUrl).map((url) => ({
+    label: url,
+    details: { url }
+  }));
+
+  // The updated Madrasati UI can scope HttpOnly authentication cookies to a
+  // parent domain or a non-root path. Domain/all-permitted fallbacks catch
+  // those cookies when a URL-only lookup does not.
+  queries.push({ label: 'domain:madrasati.sa', details: { domain: 'madrasati.sa' } });
+  queries.push({ label: 'all-permitted-madrasati', details: {} });
+
+  for (const query of queries) {
+    let allCookies = [];
+    try {
+      allCookies = await chrome.cookies.getAll(query.details);
+    } catch (error) {
+      attempts.push({ scope: query.label, count: 0, error: error?.message || String(error) });
+      continue;
+    }
+
+    const byName = new Map();
+    for (const cookie of allCookies) {
+      const domain = String(cookie.domain || '').replace(/^\./, '').toLowerCase();
+      if (domain !== 'madrasati.sa' && !domain.endsWith('.madrasati.sa')) continue;
+      if (!isForwardableMadrasatiCookie(cookie.name, cookie.value)) continue;
+      // chrome.cookies.getAll({url}) is already ordered by path specificity.
+      // Preserve the first value for a duplicated cookie name.
+      if (!byName.has(cookie.name)) {
+        byName.set(cookie.name, { name: cookie.name, value: cookie.value });
+      }
+    }
+
+    const cookies = Array.from(byName.values())
+      .sort((left, right) => Number(isMadrasatiAuthCookie(right.name)) - Number(isMadrasatiAuthCookie(left.name)))
+      .slice(0, 32);
+
+    const authCookieNames = cookies
+      .filter((cookie) => isMadrasatiAuthCookie(cookie.name))
+      .map((cookie) => cookie.name)
+      .slice(0, 8);
+    attempts.push({
+      scope: query.label,
+      count: cookies.length,
+      hasAuth: authCookieNames.length > 0,
+      authCookieNames
+    });
+
+    if (authCookieNames.length > 0) {
+      const merged = new Map();
+      for (const cookie of [...cookies, ...bestCookies]) {
+        if (!merged.has(cookie.name)) merged.set(cookie.name, cookie);
+      }
+      return {
+        cookies: Array.from(merged.values()).slice(0, 32),
+        recognizedAuthCookieNames: authCookieNames,
+        attempts
+      };
+    }
+    if (cookies.length > bestCookies.length) {
+      bestCookies = cookies;
+    }
+  }
+
+  if (bestCookies.length === 0) {
+    const checked = attempts.map((attempt) => `${attempt.scope}:${attempt.count}`).join(', ');
+    throw new Error(`لم تعثر الإضافة على أي كوكيز لمدرستي. أعد تحميل الصفحة وسجّل الدخول مجدداً. النطاقات المفحوصة: ${checked}`);
+  }
+
+  // Cookie names are an implementation detail owned by Madrasati and may
+  // change without notice. Send the complete filtered set through the signed-
+  // in extension bridge and let Madrasati validate it on the first live call.
+  console.warn('[Hadar] Sending Madrasati cookie set with an unrecognized auth-cookie name.', {
+    attempts,
+    cookieNames: bestCookies.map((cookie) => cookie.name)
+  });
+  return {
+    cookies: bestCookies,
+    recognizedAuthCookieNames: [],
+    attempts
+  };
 }
 
 // ============================================================================
@@ -280,19 +388,30 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         if (!msg.token || !/^[a-f0-9]{32}$/i.test(String(msg.schoolId || ''))) {
           throw new Error('Authenticated Hader session and a valid Madrasati school ID are required.');
         }
-        cookies = await readRequiredMadrasatiCookies();
+        const capture = await readRequiredMadrasatiCookies(msg.madrasatiUrl || msg.madrasatiOrigin);
+        cookies = capture.cookies;
+        const csrfToken = typeof msg.csrfToken === 'string' && msg.csrfToken.trim().length >= 10
+          ? msg.csrfToken.trim()
+          : null;
         const result = await callHadarApi('/madrasati/connect', {
           method: 'POST',
           headers: { 'X-Hader-Session-Bridge': 'extension-v1' },
           body: JSON.stringify({
             cookies,
-            csrf_token: msg.csrfToken || null,
+            extension_cookie_capture: true,
+            recognized_auth_cookie_names: capture.recognizedAuthCookieNames,
+            csrf_token: csrfToken,
             madrasati_school_id: msg.schoolId
           })
         }, msg.token, msg.tokenType);
         sendResponse(result);
       } catch (error) {
-        sendResponse({ ok: false, status: 0, error: error?.message || String(error) });
+        sendResponse({
+          ok: false,
+          status: 0,
+          error: error?.message || String(error),
+          diagnostics: error?.diagnostics || null
+        });
       } finally {
         cookies.length = 0;
       }

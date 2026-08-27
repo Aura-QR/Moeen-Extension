@@ -3,7 +3,7 @@
 
   globalScope.Moeen2_CONFIG = Object.freeze({
     APP_NAME: 'حضر',
-    VERSION: '10.1.0',
+    VERSION: '10.1.5',
     API_BASE_URL: 'https://api.haderedu.com/api',
     API_ORIGIN: 'https://api.haderedu.com',
     AUTH_SESSION_KEY: 'HADAR_AUTH',

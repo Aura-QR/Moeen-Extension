@@ -4471,9 +4471,43 @@
     }
 
     function getBackendResponseMessage(result, fallback) {
-      return result && result.data && (result.data.message || result.data.error)
+      var responseData = result && result.data;
+      var validationErrors = responseData && responseData.errors;
+      if (validationErrors && typeof validationErrors === 'object') {
+        var firstField = Object.keys(validationErrors)[0];
+        var firstMessages = firstField && validationErrors[firstField];
+        var firstMessage = Array.isArray(firstMessages) ? firstMessages[0] : firstMessages;
+        if (firstMessage) return 'خطأ في ' + firstField + ': ' + firstMessage;
+      }
+      return responseData && (responseData.message || responseData.error)
         || result && result.error
         || fallback;
+    }
+
+    function createBackendPreparationError(result, fallback) {
+      var error = new Error(getBackendResponseMessage(result, fallback));
+      error.backendStatus = Number(result && result.status || 0);
+      error.backendCode = result && result.data && result.data.code || null;
+      error.isBackendPreparationError = true;
+      return error;
+    }
+
+    function isBackendPolicyFailure(error) {
+      var code = error && error.backendCode;
+      return error && (
+        error.backendStatus === 401
+        || error.backendStatus === 402
+        || code === 'unauthenticated'
+        || code === 'auth_required'
+        || code === 'account_suspended'
+        || code === 'no_teacher_account'
+        || code === 'subscription_required'
+        || code === 'subscription_expired'
+        || code === 'trial_expired'
+        || code === 'quota_exceeded'
+        || code === 'batch_quota_exceeded'
+        || code === 'quota_reserved'
+      );
     }
 
     async function runBackendPreparationBatch(tokensToPrepare) {
@@ -4496,10 +4530,19 @@
         token: authSession.token,
         tokenType: authSession.tokenType || 'Bearer',
         schoolId: schoolIds[0],
-        csrfToken: getCsrfToken()
+        csrfToken: getCsrfToken(),
+        madrasatiOrigin: window.location.origin,
+        madrasatiUrl: window.location.href
       });
       if (!syncResult || !syncResult.ok) {
-        throw new Error(getBackendResponseMessage(syncResult, 'تعذر ربط جلسة مدرستي بالخادم. سجّل الدخول إلى مدرستي وأعد المحاولة.'));
+        console.warn('[Hadar] Backend session sync was rejected.', {
+          status: syncResult && syncResult.status,
+          code: syncResult && syncResult.data && syncResult.data.code,
+          cookieNames: syncResult && syncResult.data && syncResult.data.details
+            && syncResult.data.details.cookies_received || [],
+          validationErrors: syncResult && syncResult.data && syncResult.data.errors || null
+        });
+        throw createBackendPreparationError(syncResult, 'تعذر ربط جلسة مدرستي بالخادم.');
       }
 
       var lessons = tokensToPrepare.map(buildBackendPreparationPayload);
@@ -4529,7 +4572,7 @@
         payload: { client_request_id: clientRequestId, lessons: lessons }
       });
       if (!startResult || !startResult.ok) {
-        throw new Error(getBackendResponseMessage(startResult, 'تعذر بدء التحضير على الخادم.'));
+        throw createBackendPreparationError(startResult, 'تعذر بدء التحضير على الخادم.');
       }
 
       var preparationIds = startResult.data && startResult.data.preparation_ids || [];
@@ -4727,6 +4770,7 @@
         return;
       }
 
+      var usingBrowserFallback = false;
       if (BACKEND_PREPARATION_ENABLED) {
         try {
           var backendResult = await runBackendPreparationBatch(tokensToPrepare);
@@ -4737,18 +4781,37 @@
           } else {
             updateDashboardStatus('⚠️ تم تحضير ' + backendResult.succeeded + ' حصة، وفشلت ' + backendResult.failed + '. راجع سجل التحضير.', 'warning');
           }
+          return;
         } catch (error) {
-          console.error('[حضر] Backend preparation failed:', error);
-          updateDashboardStatus('❌ ' + (error && error.message || 'تعذر التحضير على الخادم.'), 'error');
+          if (isBackendPolicyFailure(error)) {
+            console.warn('[حضر] Backend preparation blocked by account policy:', error);
+            updateDashboardStatus('❌ ' + (error && error.message || 'التحضير غير متاح للحساب.'), 'error');
+            return;
+          }
+
+          // Cloud preparation is an optimization, not a dependency. If its
+          // session bridge, proxy, validation, or server is unavailable, keep
+          // the extension useful by executing the existing browser workflow.
+          console.warn('[حضر] Cloud preparation unavailable; switching to browser preparation.', {
+            status: error && error.backendStatus || 0,
+            code: error && error.backendCode || null,
+            message: error && error.message || String(error)
+          });
+          usingBrowserFallback = true;
+          updateDashboardStatus('⚠️ الخدمة السحابية غير متاحة حالياً — سيتم التحضير مباشرة داخل مدرستي...', 'warning');
         }
-        return;
       }
 
       // Generate up to three lessons at once. Madrasati writes remain ordered
       // below because their before/after ProjectId snapshots must never overlap.
       // This is a pipeline: saving lesson 1 starts as soon as its AI data is
       // ready while lessons 2+ continue generating in the background.
-      updateDashboardStatus("⚡ جاري تجهيز المحتوى بالتوازي قبل الحفظ...", "loading");
+      updateDashboardStatus(
+        usingBrowserFallback
+          ? "🖥️ جاري التحضير داخل المتصفح لأن الخدمة السحابية غير متاحة..."
+          : "⚡ جاري تجهيز المحتوى بالتوازي قبل الحفظ...",
+        usingBrowserFallback ? "warning" : "loading"
+      );
       var aiPrefetchPromises = scheduleWithConcurrency(
         tokensToPrepare,
         3,
