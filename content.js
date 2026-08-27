@@ -57,9 +57,10 @@
     var AI_LESSON_DATA_KEY = "aiLessonData";
     var AUTOMATION_MODE_KEY = "automationMode";
     var AUTH_SESSION_KEY = CONFIG.AUTH_SESSION_KEY || "HADAR_AUTH";
-    // The owner explicitly approved the secure Madrasati session-transfer flow.
-    // Backend mode lets preparation continue after the schedule tab is closed.
-    var BACKEND_PREPARATION_ENABLED = true;
+    // Keep dashboard preparation inside the signed-in Madrasati tab, matching
+    // the proven browser workflow from commit 8682ee2. This avoids depending
+    // on transferring Madrasati authentication cookies to the backend.
+    var BACKEND_PREPARATION_ENABLED = false;
     var BACKEND_PREPARATION_BATCH_KEY = "HADAR_BACKEND_PREPARATION_BATCH";
     var _lastPreparedPayload = null;
     var _lastLessonContext = null;
@@ -4432,13 +4433,12 @@
         || '';
       var timeTableId = item.div.getAttribute('data-timetable-id')
         || item.div.getAttribute('data-time-table-id')
-        || item.div.getAttribute('data-lecture-id')
         || '';
 
       if (manageUrl) {
         var parsed = new URL(manageUrl, window.location.origin);
         classroomId = parsed.searchParams.get('classroomId') || classroomId;
-        timeTableId = parsed.searchParams.get('lectureId') || parsed.searchParams.get('TimeTableId') || timeTableId;
+        timeTableId = parsed.searchParams.get('TimeTableId') || timeTableId;
       } else if (item.realSchoolId && classroomId && item.token) {
         var generatedUrl = new URL('/SchoolSchedule/Schedule/ManageLecture', window.location.origin);
         generatedUrl.searchParams.set('SchoolId', item.realSchoolId);
@@ -4451,7 +4451,10 @@
       // Green cards expose an encrypted data-data token. MlutiLessonPlan uses
       // it to recover the canonical numeric SchoolId and TimeTableId.
       var encryptedToken = String(item.token || '').length >= 16 ? String(item.token) : null;
-      timeTableId = timeTableId || String(item.token || '');
+      // data-lecture-id and the ManageLecture lectureId query parameter are
+      // schedule slot numbers (for example "7"), not TimeTableId values. The
+      // encrypted data-data token is the canonical input for both card types.
+      timeTableId = encryptedToken || timeTableId;
       if (!classroomId || !timeTableId) {
         throw new Error('بيانات الفصل أو الحصة ناقصة. أعد تحميل جدول مدرستي ثم حاول مجدداً.');
       }
@@ -4490,6 +4493,36 @@
       error.backendCode = result && result.data && result.data.code || null;
       error.isBackendPreparationError = true;
       return error;
+    }
+
+    function readBackendPreparationStatus(result) {
+      var responseData = result && result.data;
+      var preparationData = responseData && (responseData.preparation || responseData.data) || responseData;
+      var rawStatus = preparationData && (preparationData.status || preparationData.state) || '';
+      var normalized = String(rawStatus).trim().toLowerCase().replace(/[\s-]+/g, '_');
+
+      if (['done', 'completed', 'complete', 'succeeded', 'success'].includes(normalized)) {
+        return { terminal: true, succeeded: true, status: normalized, data: preparationData };
+      }
+      if (['failed', 'failure', 'error', 'cancelled', 'canceled'].includes(normalized)) {
+        return { terminal: true, succeeded: false, status: normalized, data: preparationData };
+      }
+      if (['pending', 'queued', 'processing', 'running', 'in_progress', 'started', 'retrying'].includes(normalized)) {
+        return { terminal: false, succeeded: false, status: normalized, data: preparationData };
+      }
+      return { terminal: false, succeeded: false, status: normalized, data: preparationData, invalid: true };
+    }
+
+    function getBackendStatusTrackingError(result, state, preparationId) {
+      if (!result || !result.ok || !result.data) {
+        return getBackendResponseMessage(result, 'تعذر قراءة حالة الحصة رقم ' + preparationId + ' من الخادم.');
+      }
+      if (state && state.invalid) {
+        return state.status
+          ? 'أعاد الخادم حالة غير معروفة (' + state.status + ') للحصة رقم ' + preparationId + '.'
+          : 'لم يُرجع الخادم حالة للحصة رقم ' + preparationId + '.';
+      }
+      return '';
     }
 
     function isBackendPolicyFailure(error) {
@@ -4589,47 +4622,80 @@
       var pending = new Set(preparationIds.map(String));
       var succeeded = 0;
       var failures = [];
+      var trackingFailures = new Map();
       var deadline = Date.now() + 30 * 60 * 1000;
+      try {
+        while (pending.size > 0 && Date.now() < deadline) {
+          var idsThisRound = Array.from(pending);
+          var statuses = await Promise.all(idsThisRound.map(function (id) {
+            return sendRuntimeMessage({
+              action: 'GET_BACKEND_PREPARATION_STATUS',
+              token: authSession.token,
+              tokenType: authSession.tokenType || 'Bearer',
+              preparationId: id
+            });
+          }));
+          var trackingError = '';
 
-      while (pending.size > 0 && Date.now() < deadline) {
-        var idsThisRound = Array.from(pending);
-        var statuses = await Promise.all(idsThisRound.map(function (id) {
-          return sendRuntimeMessage({
-            action: 'GET_BACKEND_PREPARATION_STATUS',
-            token: authSession.token,
-            tokenType: authSession.tokenType || 'Bearer',
-            preparationId: id
+          statuses.forEach(function (result, index) {
+            var id = idsThisRound[index];
+            var state = readBackendPreparationStatus(result);
+            var statusError = getBackendStatusTrackingError(result, state, id);
+            if (statusError) {
+              var failureCount = Number(trackingFailures.get(id) || 0) + 1;
+              trackingFailures.set(id, failureCount);
+              console.warn('[Hadar] Backend preparation status check failed.', {
+                preparationId: id,
+                attempt: failureCount,
+                httpStatus: result && result.status || 0,
+                backendStatus: state.status || null,
+                message: statusError
+              });
+              if (failureCount >= 5) trackingError = statusError;
+              return;
+            }
+
+            trackingFailures.delete(id);
+            if (!state.terminal) return;
+            pending.delete(id);
+            if (state.succeeded) {
+              succeeded++;
+            } else {
+              failures.push(
+                state.data && (state.data.error || state.data.message)
+                || ('فشلت الحصة رقم ' + id)
+              );
+            }
           });
-        }));
 
-        statuses.forEach(function (result, index) {
-          if (!result || !result.ok || !result.data) return;
-          var id = idsThisRound[index];
-          if (result.data.status === 'done') {
-            pending.delete(id);
-            succeeded++;
-          } else if (result.data.status === 'failed') {
-            pending.delete(id);
-            failures.push(result.data.error || ('فشلت الحصة رقم ' + id));
+          if (trackingError) {
+            updateDashboardStatus('⚠️ تعذر متابعة حالة التحضير: ' + trackingError + ' قد يستمر التحضير على الخادم.', 'warning');
+            return {
+              succeeded: succeeded,
+              failed: failures.length,
+              pending: pending.size,
+              trackingError: trackingError,
+              errors: failures
+            };
           }
-        });
 
-        updateDashboardStatus(
-          '☁️ التحضير مستمر على الخادم — اكتمل ' + (succeeded + failures.length) + ' من ' + preparationIds.length,
-          failures.length ? 'warning' : 'loading'
-        );
-        if (pending.size > 0) await new Promise(function (resolve) { setTimeout(resolve, 3000); });
-      }
+          updateDashboardStatus(
+            '☁️ التحضير مستمر على الخادم — اكتمل ' + (succeeded + failures.length) + ' من ' + preparationIds.length,
+            failures.length ? 'warning' : 'loading'
+          );
+          if (pending.size > 0) await new Promise(function (resolve) { setTimeout(resolve, 3000); });
+        }
 
-      if (pending.size > 0) {
+        if (pending.size > 0) {
+          updateDashboardStatus('☁️ التحضير ما زال مستمراً على الخادم ويمكنك إغلاق الصفحة بأمان.', 'loading');
+          return { succeeded: succeeded, failed: failures.length, pending: pending.size, errors: failures };
+        }
+
+        await removeLocal([BACKEND_PREPARATION_BATCH_KEY]);
+        return { succeeded: succeeded, failed: failures.length, pending: 0, errors: failures };
+      } finally {
         backendBatchPolling = false;
-        updateDashboardStatus('☁️ التحضير ما زال مستمراً على الخادم ويمكنك إغلاق الصفحة بأمان.', 'loading');
-        return { succeeded: succeeded, failed: failures.length, pending: pending.size };
       }
-
-      await removeLocal([BACKEND_PREPARATION_BATCH_KEY]);
-      backendBatchPolling = false;
-      return { succeeded: succeeded, failed: failures.length, pending: 0, errors: failures };
     }
 
     async function resumeBackendPreparationBatchIfNeeded() {
@@ -4646,6 +4712,7 @@
         var pending = new Set(preparationIds.map(String));
         var succeeded = 0;
         var failed = 0;
+        var trackingFailures = new Map();
         var deadline = Date.now() + 30 * 60 * 1000;
 
         while (pending.size && Date.now() < deadline) {
@@ -4658,16 +4725,28 @@
               preparationId: id
             });
           }));
+          var trackingError = '';
           results.forEach(function (result, index) {
-            if (!result || !result.ok || !result.data) return;
-            if (result.data.status === 'done') {
-              pending.delete(ids[index]);
-              succeeded++;
-            } else if (result.data.status === 'failed') {
-              pending.delete(ids[index]);
-              failed++;
+            var id = ids[index];
+            var state = readBackendPreparationStatus(result);
+            var statusError = getBackendStatusTrackingError(result, state, id);
+            if (statusError) {
+              var failureCount = Number(trackingFailures.get(id) || 0) + 1;
+              trackingFailures.set(id, failureCount);
+              if (failureCount >= 5) trackingError = statusError;
+              return;
             }
+            trackingFailures.delete(id);
+            if (!state.terminal) return;
+            pending.delete(id);
+            if (state.succeeded) succeeded++;
+            else failed++;
           });
+
+          if (trackingError) {
+            updateDashboardStatus('⚠️ تعذر متابعة حالة التحضير: ' + trackingError + ' قد يستمر التحضير على الخادم.', 'warning');
+            return;
+          }
 
           updateDashboardStatus(
             '☁️ التحضير على الخادم — اكتمل ' + (succeeded + failed) + ' من ' + preparationIds.length,
