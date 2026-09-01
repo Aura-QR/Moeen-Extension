@@ -23,6 +23,53 @@ async function callHadarApi(path, options, token, tokenType) {
   return { ok: response.ok, status: response.status, data };
 }
 
+async function callBrowserTicketApi(path, body) {
+  const response = await fetch(HADAR_API_BASE + path, {
+    method: 'POST',
+    headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
+    body: JSON.stringify(body || {})
+  });
+  let data = null;
+  try { data = await response.json(); } catch (_) { }
+  return { ok: response.ok, status: response.status, data };
+}
+
+async function findMadrasatiTab(openIfMissing) {
+  const tabs = await chrome.tabs.query({
+    url: ['https://schools.madrasati.sa/*', 'https://external.madrasati.sa/*']
+  });
+  const isTeacherSchedule = (item) => /\/SchoolSchedule\/Schedule\/TeacherSchedule/i.test(String(item.url || ''));
+  const tab = tabs.find((item) => item.id && item.status === 'complete' && isTeacherSchedule(item))
+    || tabs.find((item) => item.id && isTeacherSchedule(item));
+  if (tab) return { tab, opened: false };
+  if (!openIfMissing) return { tab: null, opened: false };
+  const targetUrl = 'https://schools.madrasati.sa/SchoolSchedule/Schedule/TeacherSchedule';
+  const existing = tabs.find((item) => item.id);
+  const opened = existing
+    ? await chrome.tabs.update(existing.id, { url: targetUrl, active: true })
+    : await chrome.tabs.create({ url: targetUrl, active: true });
+  return { tab: opened, opened: true };
+}
+
+async function sendToTab(tabId, message) {
+  return chrome.tabs.sendMessage(tabId, message, { frameId: 0 });
+}
+
+async function broadcastToHaderTabs(type, payload) {
+  const tabs = await chrome.tabs.query({
+    url: [
+      'https://haderedu.com/*',
+      'https://www.haderedu.com/*',
+      'http://localhost:3000/*',
+      'http://localhost:3001/*',
+      'http://127.0.0.1:3000/*'
+    ]
+  });
+  await Promise.allSettled(tabs.filter((tab) => tab.id).map((tab) =>
+    chrome.tabs.sendMessage(tab.id, { type, payload })
+  ));
+}
+
 function isMadrasatiAuthCookie(name) {
   const normalized = String(name || '').trim().toLowerCase();
   return normalized === '.aspnetcore.cookies'
@@ -343,6 +390,98 @@ chrome.runtime.onInstalled.addListener(async () => {
 // 3. MESSAGE LISTENER (API Router)
 // ============================================================================
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+
+  if (msg?.action === 'HADER_BRIDGE_PING') {
+    sendResponse({ success: true, bridgeVersion: '2' });
+    return true;
+  }
+
+  if (msg?.action === 'HADER_GET_SCHEDULE') {
+    (async () => {
+      try {
+        const found = await findMadrasatiTab(true);
+        if (found.opened) {
+          sendResponse({
+            success: false,
+            code: 'madrasati_tab_opened',
+            error: 'تم فتح مدرستي. سجّل الدخول وافتح جدول المعلم ثم اضغط تحديث الجدول مرة أخرى.'
+          });
+          return;
+        }
+        const result = await sendToTab(found.tab.id, { action: 'HADER_HARVEST_SCHEDULE' });
+        sendResponse(result || { success: false, error: 'لم تُرجع صفحة مدرستي بيانات الجدول.' });
+      } catch (error) {
+        sendResponse({ success: false, error: error?.message || String(error) });
+      }
+    })();
+    return true;
+  }
+
+  if (msg?.action === 'HADER_PREPARE_LESSONS') {
+    (async () => {
+      try {
+        if (!msg.operationId || !msg.ticket) throw new Error('بيانات تفويض التحضير ناقصة.');
+        const claim = await callBrowserTicketApi(
+          '/extension/preparations/' + encodeURIComponent(msg.operationId) + '/claim',
+          { ticket: msg.ticket }
+        );
+        if (!claim.ok || !claim.data?.success) {
+          throw new Error(claim.data?.message || 'تعذر اعتماد عملية التحضير من الخادم.');
+        }
+        if (claim.data.already_completed) {
+          await broadcastToHaderTabs('HADER_PREPARATION_DONE', claim.data);
+          sendResponse({ success: true, alreadyCompleted: true, ...claim.data });
+          return;
+        }
+
+        const found = await findMadrasatiTab(true);
+        if (found.opened) {
+          throw new Error('تم فتح مدرستي. سجّل الدخول وافتح جدول المعلم ثم أعد طلب التحضير.');
+        }
+        const accepted = await sendToTab(found.tab.id, {
+          action: 'HADER_EXECUTE_BROWSER_PREPARATION',
+          operationId: msg.operationId,
+          ticket: msg.ticket,
+          lessons: claim.data.lessons || []
+        });
+        if (!accepted?.success) throw new Error(accepted?.error || 'لم تقبل صفحة مدرستي عملية التحضير.');
+        sendResponse({ success: true, accepted: true, operationId: msg.operationId });
+      } catch (error) {
+        sendResponse({ success: false, error: error?.message || String(error) });
+      }
+    })();
+    return true;
+  }
+
+  if (msg?.action === 'HADER_BROWSER_PREPARATION_PROGRESS') {
+    void broadcastToHaderTabs('HADER_PREPARATION_PROGRESS', msg.payload || {});
+    sendResponse({ success: true });
+    return true;
+  }
+
+  if (msg?.action === 'HADER_BROWSER_PREPARATION_RESULT') {
+    (async () => {
+      try {
+        const completion = await callBrowserTicketApi(
+          '/extension/preparations/' + encodeURIComponent(msg.operationId) + '/complete',
+          { ticket: msg.ticket, results: msg.results || [] }
+        );
+        const payload = {
+          success: completion.ok,
+          status: completion.status,
+          error: completion.ok ? undefined : 'تعذر تسجيل نتيجة التحضير في الخادم.',
+          ...(completion.data || {})
+        };
+        await broadcastToHaderTabs('HADER_PREPARATION_DONE', payload);
+        sendResponse({ success: completion.ok, ...payload });
+      } catch (error) {
+        const payload = { success: false, operation_id: msg.operationId, error: error?.message || String(error) };
+        await broadcastToHaderTabs('HADER_PREPARATION_DONE', payload);
+        sendResponse(payload);
+      }
+    })();
+    return true;
+  }
 
   // --- Cookie Sync between Madrasati and Moeen web app ---
   if (msg?.action === 'GET_MADRASATI_SESSION') {

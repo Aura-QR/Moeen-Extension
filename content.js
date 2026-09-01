@@ -7315,8 +7315,211 @@
       startQuick: () => AutomationController.startQuick()
     });
     setFinalSaveButtonDetector(findFinalSaveButtonSync);
+    var haderRemotePreparationRunning = false;
+
+    function haderExtractSchoolId(card) {
+      var cell = card.closest('td') || card.parentElement;
+      var anchors = cell ? cell.querySelectorAll('a') : [];
+      for (var i = 0; i < anchors.length; i++) {
+        var match = String(anchors[i].href || '').match(/schoolId=([a-f0-9]{32})/i)
+          || String(anchors[i].getAttribute('onclick') || '').match(/['"]([a-f0-9]{32})['"]/i);
+        if (match) return match[1].toUpperCase();
+      }
+      var cardMatch = String(card.getAttribute('onclick') || '').match(/['"]([a-f0-9]{32})['"]/i);
+      if (cardMatch) return cardMatch[1].toUpperCase();
+      var params = new URLSearchParams(window.location.search);
+      var fallback = params.get('SchoolId') || params.get('schoolId') || '';
+      return /^[a-f0-9]{32}$/i.test(fallback) ? fallback.toUpperCase() : '';
+    }
+
+    function haderWeekStart() {
+      var params = new URLSearchParams(window.location.search);
+      var candidates = [params.get('week_date'), params.get('week'), params.get('startDate'), params.get('date')];
+      document.querySelectorAll('[data-week-date],[data-start-date],input[name*="week" i],input[name*="date" i]').forEach(function (node) {
+        candidates.push(node.getAttribute('data-week-date') || node.getAttribute('data-start-date') || node.value || '');
+      });
+      var date = null;
+      for (var value of candidates) {
+        if (!value) continue;
+        var parsed = new Date(value);
+        if (!Number.isNaN(parsed.getTime())) { date = parsed; break; }
+      }
+      if (!date) date = new Date();
+      date.setHours(12, 0, 0, 0);
+      date.setDate(date.getDate() - date.getDay());
+      return date.getFullYear() + '-' + String(date.getMonth() + 1).padStart(2, '0') + '-' + String(date.getDate()).padStart(2, '0');
+    }
+
+    async function harvestScheduleForHader() {
+      if (detectPageState() !== FLOW_STATES.DASHBOARD) {
+        return { success: false, code: 'schedule_not_open', error: 'افتح صفحة جدول المعلم في مدرستي ثم أعد المحاولة.' };
+      }
+      await injectDashboardUI();
+      var deadline = Date.now() + 30000;
+      while (Date.now() < deadline) {
+        await scanDashboardCards();
+        var cardCount = findScheduleCards().length;
+        var selectCount = document.querySelectorAll('.Moeen-2-dashboard-select').length;
+        if (cardCount > 0 && selectCount > 0 && selectCount >= cardCount) break;
+        await sleep(500);
+      }
+
+      var lessons = [];
+      var timetable = [];
+      var invalid = [];
+      var seen = new Set();
+      findScheduleCards().forEach(function (item) {
+        var card = item.card;
+        var token = String(card.getAttribute('data-data') || item.token || '').trim();
+        if (!token || seen.has(token)) return;
+        seen.add(token);
+        var cell = card.closest('td') || card.parentElement;
+        var subjectId = Number(item.subjectId || card.getAttribute('data-subject-id') || 0);
+        if (!subjectId && cell) {
+          for (var anchor of cell.querySelectorAll('a[href]')) {
+            var subjectMatch = String(anchor.href || '').match(/subjectId=(\d+)/i);
+            if (subjectMatch) { subjectId = Number(subjectMatch[1]); break; }
+          }
+        }
+        var classroomId = String(card.getAttribute('data-class-id') || '').trim();
+        if (!classroomId && cell) {
+          for (var classroomAnchor of cell.querySelectorAll('a[href]')) {
+            var classroomMatch = String(classroomAnchor.href || '').match(/classroomId=(\d+)/i);
+            if (classroomMatch) { classroomId = classroomMatch[1]; break; }
+          }
+        }
+        var rawDay = card.getAttribute('data-day') || (cell && cell.getAttribute('data-day')) || '';
+        var rawPeriod = card.getAttribute('data-lecture-id')
+          || (cell && cell.getAttribute('data-lecture-id'))
+          || (cell && cell.parentElement && cell.parentElement.getAttribute('data-lecture-id'))
+          || '';
+        var day = rawDay !== '' ? Number(rawDay) : (cell && cell.cellIndex > 0 ? cell.cellIndex - 1 : -1);
+        var period = rawPeriod !== '' ? Number(rawPeriod) : (cell && cell.parentElement ? cell.parentElement.rowIndex : 0);
+        var schoolId = haderExtractSchoolId(card);
+        var heading = card.querySelector('h2,h3,h4,[data-subject-name],.subject-name,.course-name');
+        var small = card.querySelector('small,.class-name,[data-class-name]');
+        var select = card.querySelector('.Moeen-2-dashboard-select');
+        var options = select ? Array.from(select.options).map(function (option) {
+          var parts = String(option.value || '').split(',');
+          if (!/^\d+,\d+,\d+$/.test(option.value || '')) return null;
+          return {
+            value: option.value,
+            text: String(option.textContent || '').trim(),
+            subject_id: Number(parts[0]),
+            chapter_id: Number(parts[1]),
+            lesson_id: Number(parts[2])
+          };
+        }).filter(Boolean) : [];
+        if (!subjectId || !classroomId || !schoolId || !Number.isInteger(day) || day < 0 || day > 5 || !Number.isInteger(period) || period < 1 || period > 10 || !options.length) {
+          invalid.push({ token: token, subject_id: subjectId, classroom_id: classroomId, day: day, period: period, options: options.length });
+          return;
+        }
+        var subjectName = String(item.subjectName || (heading && heading.textContent) || '').trim();
+        var classroomName = String((small && small.textContent) || '').trim();
+        var prepared = !!card.querySelector('.schedule-card.done,.done,[data-status="done"]');
+        lessons.push({
+          token: token,
+          subject_id: subjectId,
+          subject_name: subjectName,
+          classroom_id: classroomId,
+          classroom_name: classroomName,
+          school_madrasati_id: schoolId,
+          day: day,
+          period: period,
+          status: prepared ? 'prepared' : 'waiting',
+          options: options
+        });
+        timetable.push({
+          real_school_id: schoolId,
+          time_table_id: String(period),
+          encrypted_token: token,
+          subject_id: subjectId,
+          subject_name: subjectName,
+          classroom_id: classroomId,
+          classroom_name: classroomName,
+          madrasati_status: prepared ? 'prepared' : 'waiting',
+          day_of_week: day,
+          period_number: period
+        });
+      });
+      if (!lessons.length) {
+        return { success: false, code: 'schedule_empty', error: 'لم أتمكن من قراءة حصص صالحة من جدول مدرستي.', diagnostics: invalid.slice(0, 10) };
+      }
+      return { success: true, week_date: haderWeekStart(), lessons: lessons, timetable: timetable, invalid_count: invalid.length };
+    }
+
+    async function executeHaderBrowserPreparation(message) {
+      var results = [];
+      try {
+        for (var index = 0; index < message.lessons.length; index++) {
+          var lesson = message.lessons[index];
+          var select = Array.from(document.querySelectorAll('.Moeen-2-dashboard-select')).find(function (candidate) {
+            return candidate.getAttribute('data-lesson-token') === lesson.lesson_token;
+          });
+          try {
+            if (!select) throw new Error('لم تعد الحصة موجودة في جدول مدرستي. حدّث الجدول في حضّر.');
+            var option = Array.from(select.options).find(function (candidate) { return candidate.value === lesson.selection_value; });
+            if (!option) throw new Error('الدرس المختار غير متاح لهذه الحصة في مدرستي. حدّث الجدول.');
+            var modules = new Set(lesson.selected_modules || []);
+            setResourceEnabled('activity', modules.has('assignment'));
+            setResourceEnabled('homework', modules.has('homework'));
+            setResourceEnabled('exam', modules.has('exam'));
+            setResourceEnabled('enrichment', modules.has('enrichment'));
+            select.value = lesson.selection_value;
+            select.dispatchEvent(new Event('change', { bubbles: true }));
+            var card = select.closest('div[data-data]') || select.parentElement;
+            var selection = { treeValue: lesson.selection_value, treeText: lesson.selection_text };
+            await sendRuntimeMessage({
+              action: 'HADER_BROWSER_PREPARATION_PROGRESS',
+              payload: { operation_id: message.operationId, done: index, total: message.lessons.length, current: lesson.selection_text }
+            });
+            await prefetchAILessonDataForCard({ select: select, div: card, selection: selection });
+            var ok = await silentPrepareLesson(lesson.lesson_token, selection, lesson.subject_id, lesson.school_madrasati_id, card);
+            if (!ok) throw new Error('رفضت مدرستي حفظ التحضير.');
+            results.push({ preparation_id: lesson.preparation_id, status: 'done', error: null });
+          } catch (error) {
+            results.push({ preparation_id: lesson.preparation_id, status: 'error', error: error?.message || String(error) });
+          }
+          await sendRuntimeMessage({
+            action: 'HADER_BROWSER_PREPARATION_PROGRESS',
+            payload: { operation_id: message.operationId, done: index + 1, total: message.lessons.length, current: lesson.selection_text }
+          });
+        }
+      } finally {
+        haderRemotePreparationRunning = false;
+        await sendRuntimeMessage({
+          action: 'HADER_BROWSER_PREPARATION_RESULT',
+          operationId: message.operationId,
+          ticket: message.ticket,
+          results: results
+        });
+      }
+    }
+
     if (isContextAlive()) {
       chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+        if (message && message.action === 'HADER_HARVEST_SCHEDULE') {
+          void harvestScheduleForHader().then(sendResponse).catch(function (error) {
+            sendResponse({ success: false, error: error?.message || String(error) });
+          });
+          return true;
+        }
+
+        if (message && message.action === 'HADER_EXECUTE_BROWSER_PREPARATION') {
+          if (haderRemotePreparationRunning) {
+            sendResponse({ success: false, error: 'توجد عملية تحضير جارية بالفعل في هذا التبويب.' });
+            return true;
+          }
+          if (!Array.isArray(message.lessons) || !message.lessons.length) {
+            sendResponse({ success: false, error: 'لم يرسل الخادم أي حصص معتمدة.' });
+            return true;
+          }
+          haderRemotePreparationRunning = true;
+          sendResponse({ success: true, accepted: true });
+          void executeHaderBrowserPreparation(message);
+          return true;
+        }
+
         if (message && message.action === "EXTRACT_COOKIES") {
           try {
             const cookies = document.cookie;
@@ -7400,29 +7603,6 @@
         if (!subscriptionAccess.ok) {
           showSubscriptionAccessException(subscriptionAccess);
           return; // Stop all automation
-        }
-
-        // 3. Auto-push Madrasati session to Moeen web app if it's open
-        if (isHadarWorkflowPath()) {
-          try {
-            const cookies = document.cookie;
-            const schoolMatch = window.location.href.match(/[?&](?:SchoolId|schoolId|real_school_id)=([a-f0-9]{32})/i);
-            let schoolId = schoolMatch ? schoolMatch[1] : "";
-            if (!schoolId) {
-              const schoolEl = document.querySelector('[href*="SchoolId="], [src*="SchoolId="]');
-              if (schoolEl) {
-                const match = (schoolEl.getAttribute('href') || schoolEl.getAttribute('src')).match(/SchoolId=([a-f0-9]{32})/i);
-                if (match) schoolId = match[1];
-              }
-            }
-            chrome.runtime.sendMessage({
-              action: "PUSH_MADRASATI_SESSION",
-              session_cookie: cookies,
-              madrasati_school_id: schoolId
-            }, () => void chrome.runtime.lastError);
-          } catch (e) {
-            console.warn("[Moeen Extension] Failed to auto-push session:", e);
-          }
         }
 
         startScheduleRouteWatcher();

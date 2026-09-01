@@ -1,45 +1,51 @@
 (function () {
-  console.log("[Moeen Extension] Content script injected on Moeen Web App.");
+  'use strict';
 
-  // Request cookies from background on load
-  requestCookiesFromExtension();
+  const PAGE_SOURCE = 'HADER_WEB';
+  const EXTENSION_SOURCE = 'HADER_EXTENSION';
+  const ALLOWED_ORIGINS = new Set([
+    'https://haderedu.com',
+    'https://www.haderedu.com',
+    'http://localhost:3000',
+    'http://localhost:3001',
+    'http://127.0.0.1:3000'
+  ]);
 
-  // Listen for messages from the webpage
-  window.addEventListener("message", (event) => {
-    if (event.source !== window) return;
-    const data = event.data;
-    if (data && data.source === "MOEEN_WEB" && data.type === "MOEEN_MADRASATI_CONNECT_START") {
-      console.log("[Moeen Extension] Web page requested connection start. Fetching cookies...");
-      requestCookiesFromExtension();
-    }
-  });
-
-  // Listen for messages from the extension background script
-  chrome.runtime.onMessage.addListener((msg) => {
-    if (msg && msg.type === "MOEEN_MADRASATI_COOKIES_FOUND") {
-      console.log("[Moeen Extension] Received cookies from extension background. Forwarding to page.");
-      window.postMessage({
-        source: "MOEEN_EXTENSION",
-        type: "MOEEN_MADRASATI_COOKIES_FOUND",
-        session_cookie: msg.session_cookie,
-        madrasati_school_id: msg.madrasati_school_id
-      }, window.location.origin);
-    }
-  });
-
-  function requestCookiesFromExtension() {
-    chrome.runtime.sendMessage({ action: "GET_MADRASATI_SESSION" }, (response) => {
-      if (response && response.success && response.session_cookie) {
-        console.log("[Moeen Extension] Successfully pulled cookies from active Madrasati tab.");
-        window.postMessage({
-          source: "MOEEN_EXTENSION",
-          type: "MOEEN_MADRASATI_COOKIES_FOUND",
-          session_cookie: response.session_cookie,
-          madrasati_school_id: response.madrasati_school_id
-        }, window.location.origin);
-      } else {
-        console.log("[Moeen Extension] No active Madrasati session found or failed to pull cookies.");
-      }
-    });
+  function post(type, payload) {
+    window.postMessage({ source: EXTENSION_SOURCE, type, ...(payload || {}) }, window.location.origin);
   }
+
+  function replyFor(type) {
+    if (type === 'HADER_GET_SCHEDULE') return 'HADER_SCHEDULE_RESULT';
+    if (type === 'HADER_PREPARE_LESSONS') return 'HADER_PREPARATION_ACCEPTED';
+    return 'HADER_BRIDGE_RESULT';
+  }
+
+  window.addEventListener('message', (event) => {
+    if (event.source !== window || !ALLOWED_ORIGINS.has(event.origin)) return;
+    const data = event.data;
+    if (!data || data.source !== PAGE_SOURCE) return;
+    if (!['HADER_BRIDGE_PING', 'HADER_GET_SCHEDULE', 'HADER_PREPARE_LESSONS'].includes(data.type)) return;
+
+    chrome.runtime.sendMessage({
+      action: data.type,
+      requestId: data.requestId,
+      operationId: data.operationId,
+      ticket: data.ticket
+    }, (response) => {
+      const error = chrome.runtime.lastError;
+      post(replyFor(data.type), {
+        requestId: data.requestId,
+        ...(response || {}),
+        ...(error ? { success: false, error: error.message } : {})
+      });
+    });
+  });
+
+  chrome.runtime.onMessage.addListener((message) => {
+    if (!message || !['HADER_PREPARATION_PROGRESS', 'HADER_PREPARATION_DONE'].includes(message.type)) return;
+    post(message.type, message.payload || {});
+  });
+
+  post('HADER_EXTENSION_READY', { success: true, version: '2' });
 })();

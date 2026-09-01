@@ -37,6 +37,8 @@
     "https://k.tahdiri.com/*",
     "https://librechat-assiut-moeen-backend.tfgpna.easypanel.host/*",
     "https://api.haderedu.com/*",
+    "https://haderedu.com/*",
+    "https://www.haderedu.com/*",
     "http://localhost:3000/*",
     "http://localhost:3001/*",
     "http://127.0.0.1:3000/*",
@@ -83,6 +85,8 @@
         "http://localhost:3000/*",
         "http://localhost:3001/*",
         "http://127.0.0.1:3000/*",
+        "https://haderedu.com/*",
+        "https://www.haderedu.com/*",
         "https://*.moeen.app/*",
         "https://moeen.app/*"
       ],
