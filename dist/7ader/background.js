@@ -391,6 +391,62 @@ chrome.runtime.onInstalled.addListener(async () => {
 // ============================================================================
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
+  if (msg?.action === 'HADER_INJECT_HOMEWORK_PAGE_STATE') {
+    (async () => {
+      try {
+        if (!sender.tab?.id) throw new Error('Madrasati tab is unavailable.');
+        const injection = await chrome.scripting.executeScript({
+          target: {
+            tabId: sender.tab.id,
+            frameIds: [Number.isInteger(sender.frameId) ? sender.frameId : 0]
+          },
+          world: 'MAIN',
+          func: (payload) => {
+            try {
+              let list = null;
+              if (typeof listOfAssignments !== 'undefined' && Array.isArray(listOfAssignments)) {
+                list = listOfAssignments;
+              } else if (Array.isArray(window.listOfAssignments)) {
+                list = window.listOfAssignments;
+              }
+              if (list) {
+                const exists = list.some((item) => String(item?.assignmentId) === String(payload.assignmentId));
+                if (!exists) {
+                  list.push({
+                    assignmentId: payload.assignmentId,
+                    grade: payload.grade,
+                    assignmentName: payload.assignmentName,
+                    startDateTime: payload.startDateTime,
+                    endDateTime: payload.endDateTime,
+                    startDateTimeHijri: payload.startDateTimeHijri,
+                    endDateTimeHijri: payload.endDateTimeHijri,
+                    isGradeBook: payload.isGradeBook,
+                    assignmentIdEnc: payload.assignmentIdEnc,
+                    assignmentType: payload.assignmentType,
+                    DayCount: payload.dayCount,
+                    TimeTableIds: payload.timeTableId
+                      ? [{ timeTableId: payload.timeTableId, slot: '', date: '', classroom: '' }]
+                      : []
+                  });
+                }
+              }
+              if (typeof loadAssignmentsList === 'function') loadAssignmentsList();
+              return { success: true, listLength: list?.length ?? null };
+            } catch (error) {
+              return { success: false, error: error?.message || String(error) };
+            }
+          },
+          args: [msg.payload || {}]
+        });
+        const result = injection?.[0]?.result || { success: false, error: 'No page-world result.' };
+        sendResponse(result);
+      } catch (error) {
+        sendResponse({ success: false, error: error?.message || String(error) });
+      }
+    })();
+    return true;
+  }
+
   if (msg?.action === 'HADER_BRIDGE_PING') {
     sendResponse({ success: true, bridgeVersion: '2' });
     return true;

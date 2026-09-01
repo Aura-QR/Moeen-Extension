@@ -26,7 +26,8 @@
 
   "permissions": [
     "storage",
-    "cookies"
+    "cookies",
+    "scripting"
   ],
 
   "host_permissions": [

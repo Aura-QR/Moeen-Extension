@@ -2320,29 +2320,16 @@
       };
       if (!payload.assignmentId) return false;
       try {
-        const script = document.createElement('script');
-        script.textContent =
-          '(function(payload){try{' +
-          'var list=null;' +
-          'if(typeof listOfAssignments!=="undefined"&&Array.isArray(listOfAssignments)){list=listOfAssignments;}' +
-          'else if(Array.isArray(window.listOfAssignments)){list=window.listOfAssignments;}' +
-          'if(list){' +
-          'var exists=list.some(function(x){return String(x&&x.assignmentId)===String(payload.assignmentId);});' +
-          'if(!exists){list.push({' +
-          'assignmentId:payload.assignmentId,grade:payload.grade,assignmentName:payload.assignmentName,' +
-          'startDateTime:payload.startDateTime,endDateTime:payload.endDateTime,' +
-          'startDateTimeHijri:payload.startDateTimeHijri,endDateTimeHijri:payload.endDateTimeHijri,' +
-          'isGradeBook:payload.isGradeBook,assignmentIdEnc:payload.assignmentIdEnc,' +
-          'assignmentType:payload.assignmentType,DayCount:payload.dayCount,TimeTableIds:payload.timeTableId?[{timeTableId:payload.timeTableId,slot:"",date:"",classroom:""}]:[]' +
-          '});}' +
-          '}' +
-          'if(typeof loadAssignmentsList==="function"){try{loadAssignmentsList();}catch(_){}}' +
-          'console.log("[Moeen-2] Page listOfAssignments injected -> AssignmentId:",payload.assignmentId,"list:",list&&list.length);' +
-          '}catch(e){console.warn("[Moeen-2] Page listOfAssignments injection failed:",e&&e.message);}})(' +
-          JSON.stringify(payload).replace(/</g, '\\u003c') +
-          ');';
-        (document.documentElement || document.head || document.body).appendChild(script);
-        script.remove();
+        void sendRuntimeMessage({
+          action: 'HADER_INJECT_HOMEWORK_PAGE_STATE',
+          payload: payload
+        }).then(function (result) {
+          if (result && result.success) {
+            console.log('[Moeen-2] Page listOfAssignments injected safely -> AssignmentId:', payload.assignmentId, 'list:', result.listLength);
+          } else {
+            console.warn('[Moeen-2] Page listOfAssignments MAIN-world injection failed:', result && result.error || 'unknown error');
+          }
+        });
         return true;
       } catch (e) {
         console.warn('[Moeen-2] Could not inject homework into page state:', e && e.message);
