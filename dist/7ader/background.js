@@ -70,6 +70,28 @@ async function broadcastToHaderTabs(type, payload) {
   ));
 }
 
+async function ensureHaderBridgeInOpenTabs() {
+  const tabs = await chrome.tabs.query({
+    url: [
+      'https://haderedu.com/*',
+      'https://www.haderedu.com/*',
+      'http://localhost:3000/*',
+      'http://localhost:3001/*',
+      'http://127.0.0.1:3000/*'
+    ]
+  });
+  await Promise.allSettled(tabs.filter((tab) => tab.id).map(async (tab) => {
+    try {
+      const health = await chrome.tabs.sendMessage(tab.id, { action: 'HADER_BRIDGE_CONTENT_PING' });
+      if (health?.success) return;
+    } catch (_) { }
+    await chrome.scripting.executeScript({
+      target: { tabId: tab.id, frameIds: [0] },
+      files: ['moeen_content.js']
+    });
+  }));
+}
+
 function isMadrasatiAuthCookie(name) {
   const normalized = String(name || '').trim().toLowerCase();
   return normalized === '.aspnetcore.cookies'
@@ -384,7 +406,10 @@ chrome.action.onClicked.addListener(async (tab) => {
 
 chrome.runtime.onInstalled.addListener(async () => {
   await chrome.action.setBadgeText({ text: '' });
+  await ensureHaderBridgeInOpenTabs();
 });
+
+void ensureHaderBridgeInOpenTabs();
 
 // ============================================================================
 // 3. MESSAGE LISTENER (API Router)

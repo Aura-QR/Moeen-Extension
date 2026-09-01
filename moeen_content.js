@@ -42,7 +42,11 @@
     });
   });
 
-  chrome.runtime.onMessage.addListener((message) => {
+  chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    if (message?.action === 'HADER_BRIDGE_CONTENT_PING') {
+      sendResponse({ success: true, bridgeVersion: '2' });
+      return true;
+    }
     if (!message || !['HADER_PREPARATION_PROGRESS', 'HADER_PREPARATION_DONE'].includes(message.type)) return;
     post(message.type, message.payload || {});
   });
