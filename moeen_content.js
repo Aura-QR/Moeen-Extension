@@ -11,6 +11,11 @@
     'http://127.0.0.1:3000'
   ]);
 
+  function isAllowedOrigin(origin) {
+    return ALLOWED_ORIGINS.has(origin)
+      || /^https:\/\/([a-z0-9-]+\.)?moeen\.app$/i.test(origin);
+  }
+
   function post(type, payload) {
     window.postMessage({ source: EXTENSION_SOURCE, type, ...(payload || {}) }, window.location.origin);
   }
@@ -22,7 +27,7 @@
   }
 
   window.addEventListener('message', (event) => {
-    if (event.source !== window || !ALLOWED_ORIGINS.has(event.origin)) return;
+    if (event.source !== window || !isAllowedOrigin(event.origin)) return;
     const data = event.data;
     if (!data || data.source !== PAGE_SOURCE) return;
     if (!['HADER_BRIDGE_PING', 'HADER_GET_SCHEDULE', 'HADER_PREPARE_LESSONS'].includes(data.type)) return;

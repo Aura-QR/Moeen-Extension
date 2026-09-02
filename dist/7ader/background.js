@@ -60,6 +60,8 @@ async function broadcastToHaderTabs(type, payload) {
     url: [
       'https://haderedu.com/*',
       'https://www.haderedu.com/*',
+      'https://moeen.app/*',
+      'https://*.moeen.app/*',
       'http://localhost:3000/*',
       'http://localhost:3001/*',
       'http://127.0.0.1:3000/*'
@@ -480,12 +482,12 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg?.action === 'HADER_GET_SCHEDULE') {
     (async () => {
       try {
-        const found = await findMadrasatiTab(true);
-        if (found.opened) {
+        const found = await findMadrasatiTab(false);
+        if (!found.tab) {
           sendResponse({
             success: false,
-            code: 'madrasati_tab_opened',
-            error: 'تم فتح مدرستي. سجّل الدخول وافتح جدول المعلم ثم اضغط تحديث الجدول مرة أخرى.'
+            code: 'madrasati_tab_required',
+            error: 'افتح جدول المعلم في مدرستي أولًا، ثم اضغط تحديث الجدول.'
           });
           return;
         }
@@ -500,6 +502,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
   if (msg?.action === 'HADER_PREPARE_LESSONS') {
     (async () => {
+      let claimedLessons = [];
       try {
         if (!msg.operationId || !msg.ticket) throw new Error('بيانات تفويض التحضير ناقصة.');
         const claim = await callBrowserTicketApi(
@@ -515,19 +518,40 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           return;
         }
 
-        const found = await findMadrasatiTab(true);
-        if (found.opened) {
-          throw new Error('تم فتح مدرستي. سجّل الدخول وافتح جدول المعلم ثم أعد طلب التحضير.');
+        claimedLessons = Array.isArray(claim.data.lessons) ? claim.data.lessons : [];
+
+        const found = await findMadrasatiTab(false);
+        if (!found.tab) {
+          throw new Error('افتح جدول المعلم في مدرستي أولًا، ثم أعد طلب التحضير.');
         }
         const accepted = await sendToTab(found.tab.id, {
           action: 'HADER_EXECUTE_BROWSER_PREPARATION',
           operationId: msg.operationId,
           ticket: msg.ticket,
-          lessons: claim.data.lessons || []
+          lessons: claimedLessons
         });
         if (!accepted?.success) throw new Error(accepted?.error || 'لم تقبل صفحة مدرستي عملية التحضير.');
         sendResponse({ success: true, accepted: true, operationId: msg.operationId });
       } catch (error) {
+        // Release reserved quota immediately when a claimed browser operation
+        // cannot start in Madrasati.
+        if (claimedLessons.length && msg.operationId && msg.ticket) {
+          try {
+            await callBrowserTicketApi(
+              '/extension/preparations/' + encodeURIComponent(msg.operationId) + '/complete',
+              {
+                ticket: msg.ticket,
+                results: claimedLessons.map((lesson) => ({
+                  preparation_id: lesson.preparation_id,
+                  status: 'error',
+                  error: error?.message || String(error)
+                }))
+              }
+            );
+          } catch (completionError) {
+            console.warn('[Hader] Could not release the failed browser preparation reservation.', completionError);
+          }
+        }
         sendResponse({ success: false, error: error?.message || String(error) });
       }
     })();
