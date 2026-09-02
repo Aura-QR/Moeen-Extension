@@ -7353,14 +7353,100 @@
 
       var lessons = [];
       var timetable = [];
+      var activities = [];
       var invalid = [];
+      var missingCoreCount = 0;
       var seen = new Set();
-      findScheduleCards().forEach(function (item) {
+
+      function readCardStatus(card) {
+        var surface = card.querySelector('.schedule-card') || card;
+        var classes = String(surface.className || '').toLowerCase();
+        var text = String(surface.textContent || '').replace(/\s+/g, ' ').trim();
+
+        if (
+          classes.indexOf(' done') !== -1 ||
+          surface.classList.contains('done') ||
+          surface.querySelector('.fa-circle-check,[data-status="done"]')
+        ) return 'prepared';
+
+        if (
+          classes.indexOf('incomplete') !== -1 ||
+          surface.querySelector('.btn-outline-warning,.btn-outline-secondary') ||
+          /غير\s*مكتمل|غير\s*مكتملة/.test(text)
+        ) return 'not_prepared';
+
+        return 'waiting';
+      }
+
+      function readCellPosition(card) {
+        var cell = card.closest('td') || card.parentElement;
+        var row = cell && cell.parentElement;
+        function boundedNumber(values, min, max, fallback) {
+          for (var value of values) {
+            if (value === null || value === undefined || value === '') continue;
+            var parsed = Number(value);
+            if (Number.isInteger(parsed) && parsed >= min && parsed <= max) return parsed;
+          }
+          return fallback;
+        }
+        return {
+          cell: cell,
+          day: boundedNumber([
+            card.getAttribute('data-day'),
+            cell && cell.getAttribute('data-day')
+          ], 0, 5, cell && cell.cellIndex > 0 ? cell.cellIndex - 1 : -1),
+          period: boundedNumber([
+            card.getAttribute('data-lecture-id'),
+            card.getAttribute('data-period'),
+            cell && cell.getAttribute('data-lecture-id'),
+            cell && cell.getAttribute('data-period'),
+            cell && cell.getAttribute('id'),
+            row && row.getAttribute('data-lecture-id'),
+            row && row.getAttribute('data-period'),
+            row && row.getAttribute('id')
+          ], 1, 10, row ? row.rowIndex : 0)
+        };
+      }
+
+      function isActivityCard(card) {
+        var heading = card.querySelector('h2,h3,h4,[data-subject-name],.subject-name,.course-name');
+        var title = String((heading && heading.textContent) || card.getAttribute('data-subject-name') || '')
+          .replace(/\s+/g, ' ')
+          .trim();
+        var classes = String(card.className || '').toLowerCase();
+        return title === 'نشاط' || /(^|[-_ ])activity($|[-_ ])/.test(classes);
+      }
+
+      var seenActivities = new Set();
+      document.querySelectorAll('td.day-cell .cs-lesson-card,td.day-cell .schedule-card,td.day-cell [data-type="activity"],td.day-cell [data-activity-type="activity"]').forEach(function (candidate) {
+        var card = candidate.closest('.cs-lesson-card') || candidate;
+        if (seenActivities.has(card) || !isActivityCard(card)) return;
+        seenActivities.add(card);
+        var position = readCellPosition(card);
+        if (!Number.isInteger(position.day) || position.day < 0 || position.day > 5 || !Number.isInteger(position.period) || position.period < 1 || position.period > 10) return;
+        var classroomNode = card.querySelector('small,.class-name,[data-class-name],.p-1');
+        activities.push({
+          key: 'activity-' + position.day + '-' + position.period + '-' + activities.length,
+          subject_name: 'نشاط',
+          classroom_name: String((classroomNode && classroomNode.textContent) || '').replace(/\s+/g, ' ').trim(),
+          day: position.day,
+          period: position.period,
+          status: 'activity'
+        });
+      });
+
+      var scheduleCards = findScheduleCards();
+      var sourceLessonCardCount = scheduleCards.filter(function (item) {
+        return !isActivityCard(item.card);
+      }).length;
+      scheduleCards.forEach(function (item) {
         var card = item.card;
+        if (isActivityCard(card)) return;
         var token = String(card.getAttribute('data-data') || item.token || '').trim();
         if (!token || seen.has(token)) return;
         seen.add(token);
-        var cell = card.closest('td') || card.parentElement;
+        var position = readCellPosition(card);
+        var cell = position.cell;
         var subjectId = Number(item.subjectId || card.getAttribute('data-subject-id') || 0);
         if (!subjectId && cell) {
           for (var anchor of cell.querySelectorAll('a[href]')) {
@@ -7375,13 +7461,8 @@
             if (classroomMatch) { classroomId = classroomMatch[1]; break; }
           }
         }
-        var rawDay = card.getAttribute('data-day') || (cell && cell.getAttribute('data-day')) || '';
-        var rawPeriod = card.getAttribute('data-lecture-id')
-          || (cell && cell.getAttribute('data-lecture-id'))
-          || (cell && cell.parentElement && cell.parentElement.getAttribute('data-lecture-id'))
-          || '';
-        var day = rawDay !== '' ? Number(rawDay) : (cell && cell.cellIndex > 0 ? cell.cellIndex - 1 : -1);
-        var period = rawPeriod !== '' ? Number(rawPeriod) : (cell && cell.parentElement ? cell.parentElement.rowIndex : 0);
+        var day = position.day;
+        var period = position.period;
         var schoolId = haderExtractSchoolId(card);
         var heading = card.querySelector('h2,h3,h4,[data-subject-name],.subject-name,.course-name');
         var small = card.querySelector('small,.class-name,[data-class-name]');
@@ -7397,13 +7478,20 @@
             lesson_id: Number(parts[2])
           };
         }).filter(Boolean) : [];
-        if (!subjectId || !classroomId || !schoolId || !Number.isInteger(day) || day < 0 || day > 5 || !Number.isInteger(period) || period < 1 || period > 10 || !options.length) {
+        var hasCoreFields = !!subjectId && !!classroomId && !!schoolId
+          && Number.isInteger(day) && day >= 0 && day <= 5
+          && Number.isInteger(period) && period >= 1 && period <= 10;
+        if (!hasCoreFields) {
+          missingCoreCount++;
           invalid.push({ token: token, subject_id: subjectId, classroom_id: classroomId, day: day, period: period, options: options.length });
           return;
         }
         var subjectName = String(item.subjectName || (heading && heading.textContent) || '').trim();
         var classroomName = String((small && small.textContent) || '').trim();
-        var prepared = !!card.querySelector('.schedule-card.done,.done,[data-status="done"]');
+        var status = readCardStatus(card);
+        if (!options.length) {
+          invalid.push({ token: token, subject_id: subjectId, classroom_id: classroomId, day: day, period: period, options: 0 });
+        }
         lessons.push({
           token: token,
           subject_id: subjectId,
@@ -7413,26 +7501,38 @@
           school_madrasati_id: schoolId,
           day: day,
           period: period,
-          status: prepared ? 'prepared' : 'waiting',
+          status: status,
           options: options
         });
         timetable.push({
           real_school_id: schoolId,
-          time_table_id: String(period),
+          time_table_id: token,
           encrypted_token: token,
           subject_id: subjectId,
           subject_name: subjectName,
           classroom_id: classroomId,
           classroom_name: classroomName,
-          madrasati_status: prepared ? 'prepared' : 'waiting',
+          madrasati_status: status,
           day_of_week: day,
           period_number: period
         });
       });
-      if (!lessons.length) {
+      if (!lessons.length && !activities.length) {
         return { success: false, code: 'schedule_empty', error: 'لم أتمكن من قراءة حصص صالحة من جدول مدرستي.', diagnostics: invalid.slice(0, 10) };
       }
-      return { success: true, week_date: haderWeekStart(), lessons: lessons, timetable: timetable, invalid_count: invalid.length };
+      var captureComplete = missingCoreCount === 0 && lessons.length === sourceLessonCardCount;
+      return {
+        success: true,
+        week_date: haderWeekStart(),
+        lessons: lessons,
+        activities: activities,
+        timetable: timetable,
+        invalid_count: invalid.length,
+        source_card_count: sourceLessonCardCount + activities.length,
+        captured_card_count: lessons.length + activities.length,
+        missing_card_count: missingCoreCount,
+        capture_complete: captureComplete
+      };
     }
 
     async function executeHaderBrowserPreparation(message) {
@@ -7463,6 +7563,12 @@
             await prefetchAILessonDataForCard({ select: select, div: card, selection: selection });
             var ok = await silentPrepareLesson(lesson.lesson_token, selection, lesson.subject_id, lesson.school_madrasati_id, card);
             if (!ok) throw new Error('رفضت مدرستي حفظ التحضير.');
+            var scheduleCard = card && (card.querySelector('.schedule-card') || card);
+            if (scheduleCard) {
+              scheduleCard.classList.remove('waiting', 'incomplete');
+              scheduleCard.classList.add('done');
+              scheduleCard.setAttribute('data-status', 'done');
+            }
             results.push({ preparation_id: lesson.preparation_id, status: 'done', error: null });
           } catch (error) {
             results.push({ preparation_id: lesson.preparation_id, status: 'error', error: error?.message || String(error) });

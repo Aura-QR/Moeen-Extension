@@ -38,12 +38,24 @@ async function findMadrasatiTab(openIfMissing) {
   const tabs = await chrome.tabs.query({
     url: ['https://schools.madrasati.sa/*', 'https://external.madrasati.sa/*']
   });
-  const isTeacherSchedule = (item) => /\/SchoolSchedule\/Schedule\/TeacherSchedule/i.test(String(item.url || ''));
-  const tab = tabs.find((item) => item.id && item.status === 'complete' && isTeacherSchedule(item))
-    || tabs.find((item) => item.id && isTeacherSchedule(item));
+  const isTeacherSchedule = (item) => {
+    const url = String(item.url || '');
+    return /\/SchoolSchedule(?:\/Schedule(?:\/TeacherSchedule)?)?(?:[/?#]|$)/i.test(url)
+      || /\/services\/(?:my[-_/]?)?schedule(?:[/?#]|$)/i.test(url);
+  };
+  const scheduleTabs = tabs
+    .filter((item) => item.id && isTeacherSchedule(item))
+    .sort((left, right) => {
+      if (!!left.active !== !!right.active) return left.active ? -1 : 1;
+      if ((left.status === 'complete') !== (right.status === 'complete')) {
+        return left.status === 'complete' ? -1 : 1;
+      }
+      return Number(right.lastAccessed || 0) - Number(left.lastAccessed || 0);
+    });
+  const tab = scheduleTabs[0];
   if (tab) return { tab, opened: false };
   if (!openIfMissing) return { tab: null, opened: false };
-  const targetUrl = 'https://schools.madrasati.sa/SchoolSchedule/Schedule/TeacherSchedule';
+  const targetUrl = 'https://schools.madrasati.sa/';
   const existing = tabs.find((item) => item.id);
   const opened = existing
     ? await chrome.tabs.update(existing.id, { url: targetUrl, active: true })
@@ -533,8 +545,10 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         if (!accepted?.success) throw new Error(accepted?.error || 'لم تقبل صفحة مدرستي عملية التحضير.');
         sendResponse({ success: true, accepted: true, operationId: msg.operationId });
       } catch (error) {
-        // Release reserved quota immediately when a claimed browser operation
-        // cannot start in Madrasati.
+        // A claimed operation reserves the teacher's daily quota. If execution
+        // cannot even start (closed tab, stale content script, or another run
+        // in progress), finalize every claimed lesson as failed immediately so
+        // the reservation is released instead of blocking retries for an hour.
         if (claimedLessons.length && msg.operationId && msg.ticket) {
           try {
             await callBrowserTicketApi(
