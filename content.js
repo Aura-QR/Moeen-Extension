@@ -1707,7 +1707,7 @@
       saveBtn.id = "Moeen-2-dashboard-save";
       saveBtn.type = "button";
       saveBtn.disabled = true;
-      saveBtn.textContent = "حفظ وبدء التحضير";
+      saveBtn.textContent = "حضر";
       saveBtn.addEventListener("click", async function () {
         if (saveBtn.disabled) return;
         saveBtn.disabled = true;
@@ -1715,7 +1715,7 @@
         try {
           await handleDashboardSave();
         } finally {
-          saveBtn.textContent = "حفظ وبدء التحضير";
+          saveBtn.textContent = "حضر";
           updateDashboardCounter();
         }
       });
@@ -1868,7 +1868,7 @@
         updateDashboardCounter();
         var total = document.querySelectorAll('.Moeen-2-dashboard-select').length;
         if (total) {
-          updateDashboardStatus("اختر درساً لكل حصة ثم اضغط «حفظ وبدء التحضير» — " + total + " حصة متاحة", "info");
+          updateDashboardStatus("اختر درساً لكل حصة ثم اضغط «حضر» — " + total + " حصة متاحة", "info");
         } else if (missingSubject === cards.length) {
           updateDashboardStatus("ظهرت لوحة حضر، لكن بنية بطاقات الجدول الجديدة لا تعرض معرّف المادة بعد.", "warning");
         } else if (!added) {
