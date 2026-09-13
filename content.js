@@ -1105,8 +1105,49 @@
     var aiPrefetchWaiters = [];
     var backendBatchPolling = false;
 
+    // One live request per subject per page, shared by every card on it.
+    var liveLessonOptionsCache = new Map();
+
+    /// Lessons as Madrasati is serving them right now, or null if it could not
+    /// be asked — the caller then falls back to the bundled snapshot.
+    function getLiveLessonOptions(subjectId) {
+      var key = String(subjectId);
+      if (!liveLessonOptionsCache.has(key)) {
+        liveLessonOptionsCache.set(key, fetchGoalLessonSubjectLive(subjectId)
+          .then(function (lessons) {
+            if (!Array.isArray(lessons)) return null;
+            var out = [];
+            for (var i = 0; i < lessons.length; i++) {
+              var lesson = lessons[i];
+              if (!lesson || !lesson.info || !lesson.info.compositeId || !lesson.info.name) continue;
+              // handleDashboardSave() and the web harvest both need a
+              // subjectId,chapterId,lessonId triple. A row whose TreeId came
+              // back empty would render as an option that cannot be prepared,
+              // so it is dropped rather than offered.
+              if (!/^\d+,\d+,\d+$/.test(lesson.info.compositeId)) continue;
+              out.push({ value: lesson.info.compositeId, text: lesson.info.name, level: '1' });
+            }
+            return out.length ? out : null;
+          })
+          .catch(function () { return null; }));
+      }
+      return liveLessonOptionsCache.get(key);
+    }
+
     async function fetchLessonTreeOptions(subjectId, subjectName) {
       var optionsArray = [];
+
+      // Madrasati is asked first because it serves the lessons for the term the
+      // teacher is actually in. The bundled snapshot does not: its `groups`
+      // were captured during a second semester, so a first-semester teacher was
+      // offered chapter 6 onwards and none of chapters 1-5. Those lessons were
+      // in the file all along, in a field this path only reads when `groups`
+      // is empty — which it was not.
+      if (subjectId) {
+        const liveOptions = await getLiveLessonOptions(subjectId);
+        if (liveOptions && liveOptions.length) return liveOptions;
+      }
+
       const subjectData = await getLocalSubjectData(subjectId, subjectName);
       if (subjectData) {
         // groups هي array of arrays: groups[chapter][lesson] = {id, info:{compositeId,name,...}}
@@ -1136,23 +1177,8 @@
           });
         }
       }
-      // [Moeen-2 HYBRID] Live fallback: when local JSON yielded no real lessons,
-      // call the Madrasati GetGoalLessonSubject endpoint directly. Confirmed via network capture.
-      if (optionsArray.length === 0 && subjectId) {
-        console.log('[Moeen-2 HYBRID] Local cache miss for subjectId=', subjectId, '→ trying live GetGoalLessonSubject');
-        const liveLessons = await fetchGoalLessonSubjectLive(subjectId);
-        if (Array.isArray(liveLessons) && liveLessons.length > 0) {
-          for (const lesson of liveLessons) {
-            if (lesson && lesson.info && lesson.info.compositeId && lesson.info.name) {
-              optionsArray.push({
-                value: lesson.info.compositeId,
-                text: lesson.info.name,
-                level: '1'
-              });
-            }
-          }
-        }
-      }
+      // Live data was already tried above, so reaching here means Madrasati
+      // could not be asked and the snapshot is all there is.
       // Diagnostic log: if STILL no real lessons after both local + live attempts,
       // print the offending subjectId + subjectName for further investigation.
       if (optionsArray.length === 0) {
