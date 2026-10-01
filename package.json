@@ -3,6 +3,6 @@
     "axios": "^1.17.0"
   },
   "scripts": {
-    "test": "node test/lesson_options.test.js"
+    "test": "node test/lesson_options.test.js && node test/week_preparation.test.js"
   }
 }

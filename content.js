@@ -7898,15 +7898,86 @@
       }
     }
 
+    function findHaderLessonSelect(token) {
+      return Array.from(document.querySelectorAll('.Moeen-2-dashboard-select')).find(function (candidate) {
+        return candidate.getAttribute('data-lesson-token') === token;
+      }) || null;
+    }
+
+    // Lesson dropdowns are attached asynchronously after a week renders, so
+    // wait for the ones this run needs instead of failing on the first look.
+    async function waitForHaderLessonSelect(token, timeoutMs) {
+      var select = findHaderLessonSelect(token);
+      if (select) return select;
+      await injectDashboardUI();
+      var deadline = Date.now() + timeoutMs;
+      while (Date.now() < deadline) {
+        await scanDashboardCards();
+        select = findHaderLessonSelect(token);
+        if (select) return select;
+        await sleep(500);
+      }
+      return null;
+    }
+
+    // Moves the Madrasati grid to the week that starts on `weekDate`
+    // (YYYY-MM-DD, a Sunday) and returns the signed number of steps taken.
+    async function goToMadrasatiWeek(weekDate) {
+      var current = readMadrasatiPeriod();
+      if (!current || !current.week_date) throw new Error('تعذر قراءة الأسبوع المعروض في مدرستي.');
+      var steps = 0;
+      for (var guard = 0; guard < 8 && current.week_date !== weekDate; guard++) {
+        var direction = weekDate > current.week_date ? 1 : -1;
+        var step = await stepMadrasatiWeek(direction);
+        if (!step.moved || !step.period) {
+          var error = new Error('تعذر الانتقال إلى أسبوع الحصة في مدرستي.');
+          error.haderSteps = steps;
+          throw error;
+        }
+        steps += direction;
+        current = step.period;
+      }
+      if (current.week_date !== weekDate) {
+        var farError = new Error('أسبوع الحصة بعيد عن الأسبوع المعروض في مدرستي.');
+        farError.haderSteps = steps;
+        throw farError;
+      }
+      return steps;
+    }
+
+    async function returnFromMadrasatiWeek(steps) {
+      var direction = steps > 0 ? -1 : 1;
+      for (var i = 0; i < Math.abs(steps); i++) {
+        var back = await stepMadrasatiWeek(direction);
+        if (!back.moved) break;
+      }
+    }
+
     async function executeHaderBrowserPreparation(message) {
       var results = [];
+      // Net weeks moved away from where the teacher left Madrasati.
+      var weekSteps = 0;
+      // Group by week so the grid moves at most once per week. Lessons without
+      // a week_date (older site builds) run on whatever week is on screen.
+      var lessons = message.lessons.slice().sort(function (left, right) {
+        return String(left.week_date || '').localeCompare(String(right.week_date || ''));
+      });
       try {
-        for (var index = 0; index < message.lessons.length; index++) {
-          var lesson = message.lessons[index];
-          var select = Array.from(document.querySelectorAll('.Moeen-2-dashboard-select')).find(function (candidate) {
-            return candidate.getAttribute('data-lesson-token') === lesson.lesson_token;
-          });
+        for (var index = 0; index < lessons.length; index++) {
+          var lesson = lessons[index];
           try {
+            if (lesson.week_date) {
+              var shown = readMadrasatiPeriod();
+              if (shown && shown.week_date && shown.week_date !== lesson.week_date) {
+                try {
+                  weekSteps += await goToMadrasatiWeek(lesson.week_date);
+                } catch (navigationError) {
+                  weekSteps += navigationError.haderSteps || 0;
+                  throw navigationError;
+                }
+              }
+            }
+            var select = await waitForHaderLessonSelect(lesson.lesson_token, 30000);
             if (!select) throw new Error('لم تعد الحصة موجودة في جدول مدرستي. حدّث الجدول في حضّر.');
             var option = Array.from(select.options).find(function (candidate) { return candidate.value === lesson.selection_value; });
             if (!option) throw new Error('الدرس المختار غير متاح لهذه الحصة في مدرستي. حدّث الجدول.');
@@ -7942,13 +8013,18 @@
           });
         }
       } finally {
-        haderRemotePreparationRunning = false;
-        await sendRuntimeMessage({
-          action: 'HADER_BROWSER_PREPARATION_RESULT',
-          operationId: message.operationId,
-          ticket: message.ticket,
-          results: results
-        });
+        try {
+          await sendRuntimeMessage({
+            action: 'HADER_BROWSER_PREPARATION_RESULT',
+            operationId: message.operationId,
+            ticket: message.ticket,
+            results: results
+          });
+          // Put the teacher back on the week they were looking at.
+          if (weekSteps) await returnFromMadrasatiWeek(weekSteps);
+        } finally {
+          haderRemotePreparationRunning = false;
+        }
       }
     }
 
