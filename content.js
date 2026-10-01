@@ -7547,9 +7547,12 @@
         return { success: false, code: 'schedule_empty', error: 'لم أتمكن من قراءة حصص صالحة من جدول مدرستي.', diagnostics: invalid.slice(0, 10) };
       }
       var captureComplete = missingCoreCount === 0 && lessons.length === sourceLessonCardCount;
+      var period = readMadrasatiPeriod();
       return {
         success: true,
-        week_date: haderWeekStart(),
+        week_date: (period && period.week_date) || haderWeekStart(),
+        week_source: period && period.week_date ? 'period' : 'fallback',
+        period_label: period ? period.label : '',
         lessons: lessons,
         activities: activities,
         timetable: timetable,
@@ -7559,6 +7562,326 @@
         missing_card_count: missingCoreCount,
         capture_complete: captureComplete
       };
+    }
+
+    // Madrasati swaps the week grid in place (POST GetTeacherSchedule?week=N),
+    // so the URL never says which week is on screen. The period label
+    // ("الفترة 1448/05/07 - 1448/05/11") is the only on-page source of truth.
+    var haderHijriFormatter = null;
+
+    function haderHijriParts(date) {
+      try {
+        haderHijriFormatter = haderHijriFormatter || new Intl.DateTimeFormat('en-u-ca-islamic-umalqura-nu-latn', {
+          year: 'numeric', month: 'numeric', day: 'numeric', timeZone: 'UTC'
+        });
+        var parts = {};
+        haderHijriFormatter.formatToParts(date).forEach(function (part) { parts[part.type] = part.value; });
+        return { y: parseInt(parts.year, 10), m: parseInt(parts.month, 10), d: parseInt(parts.day, 10) };
+      } catch (_) {
+        return null;
+      }
+    }
+
+    function haderHijriToGregorian(y, m, d) {
+      var now = new Date();
+      var todayUtc = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate(), 12);
+      var today = haderHijriParts(new Date(todayUtc));
+      if (!today) return null;
+      var estimate = Math.round((y - today.y) * 354.367 + (m - today.m) * 29.5306 + (d - today.d));
+      for (var spread = 0; spread <= 6; spread++) {
+        for (var sign of [1, -1]) {
+          var candidate = new Date(todayUtc + (estimate + sign * spread) * 86400000);
+          var parts = haderHijriParts(candidate);
+          if (parts && parts.y === y && parts.m === m && parts.d === d) return candidate;
+          if (spread === 0) break;
+        }
+      }
+      return null;
+    }
+
+    function haderSundayOf(utcDate) {
+      var sunday = new Date(utcDate.getTime() - utcDate.getUTCDay() * 86400000);
+      return sunday.getUTCFullYear() + '-' + String(sunday.getUTCMonth() + 1).padStart(2, '0') + '-' + String(sunday.getUTCDate()).padStart(2, '0');
+    }
+
+    function haderLatinDigits(text) {
+      return String(text || '').replace(/[٠-٩]/g, function (digit) {
+        return String(digit.charCodeAt(0) - 0x0660);
+      });
+    }
+
+    function findMadrasatiPeriodLabel() {
+      var walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, {
+        acceptNode: function (node) {
+          return /الفترة/.test(node.nodeValue || '') ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
+        }
+      });
+      var node;
+      while ((node = walker.nextNode())) {
+        var element = node.parentElement;
+        if (!element || element.closest('[class*="Moeen-2"]')) continue;
+        // The dates may sit in a sibling of the "الفترة" text, so climb a few
+        // levels until the element holds a Hijri date, but stop before it
+        // grows into a whole section of the page.
+        for (var depth = 0; element && depth < 4; depth++) {
+          var text = haderLatinDigits(element.textContent);
+          if (text.length > 160) break;
+          if (/1[34]\d\d\/\d{1,2}\/\d{1,2}/.test(text)) return element;
+          element = element.parentElement;
+        }
+      }
+      return null;
+    }
+
+    function readMadrasatiPeriod() {
+      var element = findMadrasatiPeriodLabel();
+      if (!element) return null;
+      var text = haderLatinDigits(element.textContent).replace(/\s+/g, ' ').trim();
+      var dates = [];
+      var pattern = /(1[34]\d\d)\/(\d{1,2})\/(\d{1,2})/g;
+      var match;
+      while ((match = pattern.exec(text))) {
+        var y = Number(match[1]);
+        var m = Number(match[2]);
+        var d = Number(match[3]);
+        dates.push({ y: y, m: m, d: d, ordinal: y * 372 + m * 31 + d });
+      }
+      if (!dates.length) return null;
+      // RTL rendering puts the end date first, so sort instead of trusting order.
+      dates.sort(function (left, right) { return left.ordinal - right.ordinal; });
+      var start = dates[0];
+      var gregorian = haderHijriToGregorian(start.y, start.m, start.d);
+      return {
+        element: element,
+        label: text,
+        key: dates.map(function (date) { return date.ordinal; }).join('|'),
+        ordinal: start.ordinal,
+        week_date: gregorian ? haderSundayOf(gregorian) : null
+      };
+    }
+
+    function isHaderArrowDisabled(element) {
+      if (!element || !document.contains(element)) return true;
+      if (element.disabled || element.getAttribute('aria-disabled') === 'true') return true;
+      if (/(^|\s)disabled(\s|$)/i.test(String(element.className || ''))) return true;
+      return !isTrulyVisible(element);
+    }
+
+    function findMadrasatiWeekArrows(labelElement) {
+      var clickable = 'button,a,[role="button"],[onclick]';
+      var iconish = 'i,svg,span[class*="chevron" i],span[class*="arrow" i],span[class*="angle" i]';
+      var scope = labelElement;
+      for (var depth = 0; scope && depth < 5; depth++) {
+        var found = [];
+        scope.querySelectorAll(clickable + ',' + iconish).forEach(function (candidate) {
+          var target = candidate.closest(clickable) || candidate;
+          if (found.indexOf(target) !== -1 || target.closest('[class*="Moeen-2"]')) return;
+          var signature = [
+            target.className && target.className.baseVal !== undefined ? target.className.baseVal : target.className,
+            target.id, target.getAttribute('title'), target.getAttribute('aria-label'),
+            target.getAttribute('onclick'), target.getAttribute('href'),
+            Array.from(target.querySelectorAll('i,svg,span')).map(function (icon) {
+              return String(icon.getAttribute('class') || '');
+            }).join(' ')
+          ].join(' ');
+          var text = String(target.textContent || '').replace(/\s+/g, '');
+          var arrowText = /^[<>‹›«»❮❯]+$/.test(text);
+          var arrowSignature = /chevron|angle|arrow|next|prev|التالي|السابق|week/i.test(signature);
+          if (!arrowText && !(arrowSignature && text.length <= 20)) return;
+          var direction = 0;
+          if (/next|التالي|forward|week\s*\+|\+\s*1/i.test(signature + ' ' + text)) direction = 1;
+          else if (/prev|السابق|back|week\s*-|-\s*1/i.test(signature + ' ' + text)) direction = -1;
+          found.push(target);
+          found[found.length - 1].haderDirection = direction;
+        });
+        if (found.length >= 2) return found;
+        scope = scope.parentElement;
+      }
+      return [];
+    }
+
+    // Which unlabeled arrow (by DOM order) moves forward on this page, learned
+    // from the first click whose result we could verify.
+    var haderForwardArrowIndex = null;
+
+    async function waitForMadrasatiPeriodChange(previousKey, timeoutMs) {
+      var deadline = Date.now() + timeoutMs;
+      while (Date.now() < deadline) {
+        await sleep(250);
+        var period = readMadrasatiPeriod();
+        if (period && period.key !== previousKey) {
+          await waitForHaderDomQuiet(600, 4000);
+          return readMadrasatiPeriod() || period;
+        }
+      }
+      return null;
+    }
+
+    function waitForHaderDomQuiet(quietMs, maxMs) {
+      return new Promise(function (resolve) {
+        var quietTimer = null;
+        var observer = new MutationObserver(function () {
+          clearTimeout(quietTimer);
+          quietTimer = setTimeout(finish, quietMs);
+        });
+        var hardTimer = setTimeout(finish, maxMs);
+        function finish() {
+          clearTimeout(quietTimer);
+          clearTimeout(hardTimer);
+          observer.disconnect();
+          resolve();
+        }
+        observer.observe(document.body, { childList: true, subtree: true });
+        quietTimer = setTimeout(finish, quietMs);
+      });
+    }
+
+    async function clickMadrasatiArrowAndWait(arrow, before) {
+      if (isHaderArrowDisabled(arrow)) return null;
+      arrow.click();
+      return waitForMadrasatiPeriodChange(before.key, 20000);
+    }
+
+    // Moves the Madrasati grid one week in `direction` (1 forward, -1 back) and
+    // waits for the new week to render. Resolves { moved: false } at the end
+    // of the range or when the arrows cannot be found.
+    async function stepMadrasatiWeek(direction, isCorrection) {
+      var before = readMadrasatiPeriod();
+      if (!before) return { moved: false, reason: 'period_label_not_found' };
+      var arrows = findMadrasatiWeekArrows(before.element);
+      if (!arrows.length) return { moved: false, reason: 'week_arrows_not_found' };
+
+      var labelled = arrows.filter(function (arrow) { return arrow.haderDirection === direction; });
+      var unlabelled = arrows.filter(function (arrow) { return arrow.haderDirection === 0; });
+      var ordered = labelled.slice();
+      if (unlabelled.length === 2 && haderForwardArrowIndex !== null) {
+        ordered.push(unlabelled[direction === 1 ? haderForwardArrowIndex : 1 - haderForwardArrowIndex]);
+      } else {
+        ordered = ordered.concat(unlabelled);
+      }
+
+      for (var i = 0; i < ordered.length && i < 2; i++) {
+        var arrow = ordered[i];
+        var after = await clickMadrasatiArrowAndWait(arrow, before);
+        if (!after) continue;
+        var movedForward = after.ordinal > before.ordinal;
+        var unlabelledIndex = unlabelled.indexOf(arrow);
+        if (unlabelledIndex !== -1 && unlabelled.length === 2) {
+          haderForwardArrowIndex = movedForward ? unlabelledIndex : 1 - unlabelledIndex;
+        }
+        if ((direction === 1) === movedForward) return { moved: true, period: after };
+
+        // Wrong way: the learned arrow now points the right way. Undo, then step.
+        if (isCorrection) return { moved: false, reason: 'week_direction_unresolved' };
+        var back = await stepMadrasatiWeek(-direction, true);
+        if (!back.moved) return { moved: false, reason: 'week_direction_unresolved' };
+        return stepMadrasatiWeek(direction, true);
+      }
+      return { moved: false, reason: 'end_of_range' };
+    }
+
+    function slimHaderWeek(snapshot) {
+      return {
+        week_date: snapshot.week_date,
+        week_source: snapshot.week_source,
+        period_label: snapshot.period_label,
+        timetable: snapshot.timetable,
+        activities: snapshot.activities || [],
+        lesson_count: (snapshot.lessons || []).length,
+        invalid_count: snapshot.invalid_count || 0,
+        capture_complete: snapshot.capture_complete
+      };
+    }
+
+    var haderAllWeeksRunning = false;
+
+    // Walks forward from the week on screen, harvesting each one, and streams
+    // every week to حضّر as it is read. Returns how many steps it moved so the
+    // caller can bring the teacher back to where they were.
+    async function harvestAllWeeksForHader(harvestId, maxWeeks) {
+      var limit = Math.min(Math.max(Number(maxWeeks) || 20, 1), 30);
+      var weeks = [];
+      var skipped = [];
+      var moves = 0;
+      var stopReason = 'max_weeks';
+
+      function report(week) {
+        return sendRuntimeMessage({
+          action: 'HADER_ALL_WEEKS_PROGRESS',
+          payload: { harvest_id: harvestId, index: weeks.length + skipped.length, max_weeks: limit, week: week }
+        });
+      }
+
+      var first = await harvestScheduleForHader();
+      if (!first.success) return { result: Object.assign({ harvest_id: harvestId }, first), moves: 0 };
+      weeks.push(slimHaderWeek(first));
+      await report(weeks[0]);
+
+      if (first.week_source !== 'period') {
+        // Without the period label we cannot prove which week each click
+        // landed on, and a wrong week_date would overwrite another week.
+        return {
+          result: { success: true, harvest_id: harvestId, weeks_count: 1, skipped_weeks: [], stop_reason: 'period_label_not_found', complete: false },
+          moves: 0
+        };
+      }
+
+      var lastWeekDate = first.week_date;
+      while (weeks.length + skipped.length < limit) {
+        var step = await stepMadrasatiWeek(1);
+        if (!step.moved) { stopReason = step.reason || 'end_of_range'; break; }
+        moves++;
+        var weekDate = step.period && step.period.week_date;
+        if (!weekDate || weekDate <= lastWeekDate) { stopReason = 'week_not_advanced'; break; }
+        lastWeekDate = weekDate;
+
+        var snapshot = await harvestScheduleForHader();
+        if (!snapshot.success) {
+          if (snapshot.code !== 'schedule_empty') { stopReason = snapshot.code || 'harvest_failed'; break; }
+          // A holiday week has no cards; keep walking past it.
+          skipped.push(weekDate);
+          await report({ week_date: weekDate, empty: true });
+          continue;
+        }
+        if (snapshot.week_source !== 'period' || snapshot.week_date !== weekDate) {
+          stopReason = 'week_not_advanced';
+          break;
+        }
+        var week = slimHaderWeek(snapshot);
+        weeks.push(week);
+        await report(week);
+      }
+
+      return {
+        result: {
+          success: true,
+          harvest_id: harvestId,
+          weeks_count: weeks.length,
+          skipped_weeks: skipped,
+          stop_reason: stopReason,
+          complete: stopReason === 'end_of_range' || stopReason === 'max_weeks'
+        },
+        moves: moves
+      };
+    }
+
+    async function runHaderAllWeeksHarvest(message) {
+      var outcome = { result: null, moves: 0 };
+      try {
+        outcome = await harvestAllWeeksForHader(message.harvestId, message.maxWeeks);
+      } catch (error) {
+        outcome.result = { success: false, harvest_id: message.harvestId, error: error?.message || String(error) };
+      }
+      try {
+        await sendRuntimeMessage({ action: 'HADER_ALL_WEEKS_DONE', payload: outcome.result });
+        // Put the teacher back on the week they were looking at.
+        for (var i = 0; i < outcome.moves; i++) {
+          var back = await stepMadrasatiWeek(-1);
+          if (!back.moved) break;
+        }
+      } finally {
+        haderAllWeeksRunning = false;
+      }
     }
 
     async function executeHaderBrowserPreparation(message) {
@@ -7624,8 +7947,23 @@
           return true;
         }
 
+        if (message && message.action === 'HADER_HARVEST_ALL_WEEKS') {
+          if (haderAllWeeksRunning || haderRemotePreparationRunning) {
+            sendResponse({ success: false, error: 'توجد عملية جارية بالفعل في تبويب مدرستي. انتظر حتى تنتهي.' });
+            return true;
+          }
+          if (detectPageState() !== FLOW_STATES.DASHBOARD) {
+            sendResponse({ success: false, code: 'schedule_not_open', error: 'افتح صفحة جدول المعلم في مدرستي ثم أعد المحاولة.' });
+            return true;
+          }
+          haderAllWeeksRunning = true;
+          sendResponse({ success: true, accepted: true });
+          void runHaderAllWeeksHarvest(message);
+          return true;
+        }
+
         if (message && message.action === 'HADER_EXECUTE_BROWSER_PREPARATION') {
-          if (haderRemotePreparationRunning) {
+          if (haderRemotePreparationRunning || haderAllWeeksRunning) {
             sendResponse({ success: false, error: 'توجد عملية تحضير جارية بالفعل في هذا التبويب.' });
             return true;
           }

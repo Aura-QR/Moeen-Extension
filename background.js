@@ -512,6 +512,42 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     return true;
   }
 
+  if (msg?.action === 'HADER_GET_ALL_WEEKS') {
+    // Accept and return at once; the weeks stream back as
+    // HADER_WEEK_HARVESTED / HADER_ALL_WEEKS_DONE broadcasts so no single
+    // message has to stay open for the whole multi-minute walk.
+    (async () => {
+      try {
+        const found = await findMadrasatiTab(false);
+        if (!found.tab) {
+          sendResponse({
+            success: false,
+            code: 'madrasati_tab_required',
+            error: 'افتح مدرستي وسجّل الدخول ثم افتح جدول المعلم واضغط تحديث.'
+          });
+          return;
+        }
+        const accepted = await sendToTab(found.tab.id, {
+          action: 'HADER_HARVEST_ALL_WEEKS',
+          harvestId: msg.harvestId,
+          maxWeeks: msg.maxWeeks
+        });
+        sendResponse(accepted || { success: false, error: 'لم تستجب صفحة مدرستي. أعد تحميلها ثم حاول مرة أخرى.' });
+      } catch (error) {
+        sendResponse({ success: false, error: error?.message || String(error) });
+      }
+    })();
+    return true;
+  }
+
+  if (msg?.action === 'HADER_ALL_WEEKS_PROGRESS' || msg?.action === 'HADER_ALL_WEEKS_DONE') {
+    // Await the broadcast before answering: content.js waits for this reply
+    // before sending the next event, which keeps weeks ordered before DONE.
+    const type = msg.action === 'HADER_ALL_WEEKS_DONE' ? 'HADER_ALL_WEEKS_DONE' : 'HADER_WEEK_HARVESTED';
+    broadcastToHaderTabs(type, msg.payload || {}).finally(() => sendResponse({ success: true }));
+    return true;
+  }
+
   if (msg?.action === 'HADER_PREPARE_LESSONS') {
     (async () => {
       let claimedLessons = [];

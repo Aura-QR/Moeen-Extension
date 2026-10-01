@@ -22,6 +22,7 @@
 
   function replyFor(type) {
     if (type === 'HADER_GET_SCHEDULE') return 'HADER_SCHEDULE_RESULT';
+    if (type === 'HADER_GET_ALL_WEEKS') return 'HADER_ALL_WEEKS_ACCEPTED';
     if (type === 'HADER_PREPARE_LESSONS') return 'HADER_PREPARATION_ACCEPTED';
     return 'HADER_BRIDGE_RESULT';
   }
@@ -30,13 +31,15 @@
     if (event.source !== window || !isAllowedOrigin(event.origin)) return;
     const data = event.data;
     if (!data || data.source !== PAGE_SOURCE) return;
-    if (!['HADER_BRIDGE_PING', 'HADER_GET_SCHEDULE', 'HADER_PREPARE_LESSONS'].includes(data.type)) return;
+    if (!['HADER_BRIDGE_PING', 'HADER_GET_SCHEDULE', 'HADER_GET_ALL_WEEKS', 'HADER_PREPARE_LESSONS'].includes(data.type)) return;
 
     chrome.runtime.sendMessage({
       action: data.type,
       requestId: data.requestId,
       operationId: data.operationId,
-      ticket: data.ticket
+      ticket: data.ticket,
+      harvestId: data.harvestId,
+      maxWeeks: data.maxWeeks
     }, (response) => {
       const error = chrome.runtime.lastError;
       post(replyFor(data.type), {
@@ -52,7 +55,12 @@
       sendResponse({ success: true, bridgeVersion: '2' });
       return true;
     }
-    if (!message || !['HADER_PREPARATION_PROGRESS', 'HADER_PREPARATION_DONE'].includes(message.type)) return;
+    if (!message || ![
+      'HADER_PREPARATION_PROGRESS',
+      'HADER_PREPARATION_DONE',
+      'HADER_WEEK_HARVESTED',
+      'HADER_ALL_WEEKS_DONE'
+    ].includes(message.type)) return;
     post(message.type, message.payload || {});
   });
 
