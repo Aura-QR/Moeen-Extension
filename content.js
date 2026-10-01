@@ -7363,18 +7363,29 @@
       return date.getFullYear() + '-' + String(date.getMonth() + 1).padStart(2, '0') + '-' + String(date.getDate()).padStart(2, '0');
     }
 
-    async function harvestScheduleForHader() {
+    // `light` skips waiting for the per-card lesson dropdowns. Those only feed
+    // preparation; the weekly report needs the timetable alone, and waiting for
+    // them cost up to 30s per week whenever a card never got a dropdown.
+    async function harvestScheduleForHader(harvestOptions) {
+      var light = Boolean(harvestOptions && harvestOptions.light);
       if (detectPageState() !== FLOW_STATES.DASHBOARD) {
         return { success: false, code: 'schedule_not_open', error: 'افتح صفحة جدول المعلم في مدرستي ثم أعد المحاولة.' };
       }
-      await injectDashboardUI();
-      var deadline = Date.now() + 30000;
-      while (Date.now() < deadline) {
-        await scanDashboardCards();
-        var cardCount = findScheduleCards().length;
-        var selectCount = document.querySelectorAll('.Moeen-2-dashboard-select').length;
-        if (cardCount > 0 && selectCount > 0 && selectCount >= cardCount) break;
-        await sleep(500);
+      if (light) {
+        var lightDeadline = Date.now() + 4000;
+        while (Date.now() < lightDeadline && !findScheduleCards().length) {
+          await sleep(250);
+        }
+      } else {
+        await injectDashboardUI();
+        var deadline = Date.now() + 30000;
+        while (Date.now() < deadline) {
+          await scanDashboardCards();
+          var cardCount = findScheduleCards().length;
+          var selectCount = document.querySelectorAll('.Moeen-2-dashboard-select').length;
+          if (cardCount > 0 && selectCount > 0 && selectCount >= cardCount) break;
+          await sleep(500);
+        }
       }
 
       var lessons = [];
@@ -7656,7 +7667,10 @@
         label: text,
         key: dates.map(function (date) { return date.ordinal; }).join('|'),
         ordinal: start.ordinal,
-        week_date: gregorian ? haderSundayOf(gregorian) : null
+        // Snap from mid-week: a one-day disagreement between Madrasati's Hijri
+        // calendar and Umm al-Qura would otherwise turn Sunday into Saturday
+        // and file the week under the previous one.
+        week_date: gregorian ? haderSundayOf(new Date(gregorian.getTime() + 2 * 86400000)) : null
       };
     }
 
@@ -7812,7 +7826,7 @@
         });
       }
 
-      var first = await harvestScheduleForHader();
+      var first = await harvestScheduleForHader({ light: true });
       if (!first.success) return { result: Object.assign({ harvest_id: harvestId }, first), moves: 0 };
       weeks.push(slimHaderWeek(first));
       await report(weeks[0]);
@@ -7835,7 +7849,7 @@
         if (!weekDate || weekDate <= lastWeekDate) { stopReason = 'week_not_advanced'; break; }
         lastWeekDate = weekDate;
 
-        var snapshot = await harvestScheduleForHader();
+        var snapshot = await harvestScheduleForHader({ light: true });
         if (!snapshot.success) {
           if (snapshot.code !== 'schedule_empty') { stopReason = snapshot.code || 'harvest_failed'; break; }
           // A holiday week has no cards; keep walking past it.
