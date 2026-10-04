@@ -7724,17 +7724,31 @@
         await sleep(250);
         var period = readMadrasatiPeriod();
         if (period && period.key !== previousKey) {
-          await waitForHaderDomQuiet(600, 4000);
+          await waitForHaderDomQuiet(400, 2500);
           return readMadrasatiPeriod() || period;
         }
       }
       return null;
     }
 
+    function isHaderOwnNode(node) {
+      var element = node && (node.nodeType === 1 ? node : node.parentElement);
+      return Boolean(element && element.closest && element.closest('[class*="Moeen-2"],[id^="Moeen-2"],[id^="hader-"],[id^="hadar-"]'));
+    }
+
+    // Waits until the schedule grid stops changing. Watches the grid only and
+    // ignores حضر's own dropdowns and badges: watching the whole page meant the
+    // extension's periodic UI refresh kept every week step waiting the full max.
     function waitForHaderDomQuiet(quietMs, maxMs) {
       return new Promise(function (resolve) {
         var quietTimer = null;
-        var observer = new MutationObserver(function () {
+        var observer = new MutationObserver(function (records) {
+          var external = records.some(function (record) {
+            if (isHaderOwnNode(record.target)) return false;
+            var nodes = Array.from(record.addedNodes).concat(Array.from(record.removedNodes));
+            return !nodes.length || nodes.some(function (node) { return !isHaderOwnNode(node); });
+          });
+          if (!external) return;
           clearTimeout(quietTimer);
           quietTimer = setTimeout(finish, quietMs);
         });
@@ -7745,7 +7759,9 @@
           observer.disconnect();
           resolve();
         }
-        observer.observe(document.body, { childList: true, subtree: true });
+        var cell = document.querySelector('td.day-cell');
+        var grid = cell && cell.closest('table');
+        observer.observe((grid && grid.parentElement) || document.body, { childList: true, subtree: true });
         quietTimer = setTimeout(finish, quietMs);
       });
     }
@@ -7929,7 +7945,15 @@
       }
       try {
         await sendRuntimeMessage({ action: 'HADER_ALL_WEEKS_DONE', payload: outcome.result });
-        // Put the teacher back on the week they were looking at.
+        // Put the teacher back. Madrasati opens on the current week, so one
+        // reload replaces walking back week by week. Not when a preparation
+        // interrupted the walk: a reload would kill that preparation, and it
+        // moves the grid to its own weeks anyway.
+        if (outcome.moves > 1 && !haderAllWeeksAbort) {
+          hideHaderWorkBanner();
+          window.location.reload();
+          return;
+        }
         for (var i = 0; i < outcome.moves; i++) {
           var back = await stepMadrasatiWeek(-1);
           if (!back.moved) break;
