@@ -11,7 +11,9 @@
 const fs = require('fs');
 const path = require('path');
 
-const SOURCE = fs.readFileSync(path.join(__dirname, '..', 'content.js'), 'utf8');
+// Windows checkouts (core.autocrlf) give content.js CRLF endings, which would
+// hide the multi-line END marker below.
+const SOURCE = fs.readFileSync(path.join(__dirname, '..', 'content.js'), 'utf8').replace(/\r\n/g, '\n');
 const START = '    function findHaderLessonSelect(token)';
 const END = '    if (isContextAlive()) {\n      chrome.runtime.onMessage.addListener';
 

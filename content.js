@@ -7844,14 +7844,36 @@
       }
     }
 
-    // Walks forward from the week on screen, harvesting each one, and streams
-    // every week to حضّر as it is read. Returns how many steps it moved so the
-    // caller can bring the teacher back to where they were.
-    async function harvestAllWeeksForHader(harvestId, maxWeeks) {
-      var limit = Math.min(Math.max(Number(maxWeeks) || 20, 1), 30);
+    // The weeks a sync reads around this week. Teachers prepare next week and
+    // look back over the last few; walking Madrasati's whole term (20 weeks
+    // out and 20 back) took minutes and read weeks nobody opened.
+    var HADER_WEEKS_BEFORE = 4;
+    var HADER_WEEKS_AFTER = 1;
+
+    function haderWeekCount(value, fallback) {
+      if (value === undefined || value === null || value === '') return fallback;
+      var number = Math.floor(Number(value));
+      if (!Number.isFinite(number)) return fallback;
+      return Math.min(Math.max(number, 0), 30);
+    }
+
+    // Reads this week, the weeks after it, then the weeks before it, and
+    // streams every week to حضّر as it is read. A request without
+    // weeksBefore/weeksAfter (an older site) gets the old forward walk of
+    // maxWeeks. `moves` in the result is the signed number of weeks the grid
+    // ends away from where it started, so the caller can bring the teacher back.
+    async function harvestAllWeeksForHader(harvestId, options) {
+      options = options || {};
+      var windowed = options.weeksBefore != null || options.weeksAfter != null;
+      var before = windowed ? haderWeekCount(options.weeksBefore, HADER_WEEKS_BEFORE) : 0;
+      var after = windowed
+        ? haderWeekCount(options.weeksAfter, HADER_WEEKS_AFTER)
+        : Math.min(Math.max(Number(options.maxWeeks) || 20, 1), 30) - 1;
+      var limit = before + after + 1;
       var weeks = [];
       var skipped = [];
-      var moves = 0;
+      var seen = {};
+      var offset = 0;
       var stopReason = 'max_weeks';
 
       function report(week) {
@@ -7861,9 +7883,25 @@
         });
       }
 
+      // Count from today's week, not whichever week the teacher left on screen.
+      if (windowed) {
+        var shown = readMadrasatiPeriod();
+        // Madrasati's weeks follow Riyadh time (UTC+3).
+        var thisWeek = haderSundayOf(new Date(Date.now() + 3 * 3600000));
+        if (shown && shown.week_date && shown.week_date !== thisWeek) {
+          try {
+            offset += await goToMadrasatiWeek(thisWeek);
+          } catch (error) {
+            // Out of reach: read around the week on screen instead.
+            offset += error.haderSteps || 0;
+          }
+        }
+      }
+
       var first = await harvestScheduleForHader({ light: true });
-      if (!first.success) return { result: Object.assign({ harvest_id: harvestId }, first), moves: 0 };
+      if (!first.success) return { result: Object.assign({ harvest_id: harvestId }, first), moves: offset };
       weeks.push(slimHaderWeek(first));
+      seen[first.week_date] = true;
       await report(weeks[0]);
 
       if (first.week_source !== 'period') {
@@ -7871,35 +7909,58 @@
         // landed on, and a wrong week_date would overwrite another week.
         return {
           result: { success: true, harvest_id: harvestId, weeks_count: 1, skipped_weeks: [], stop_reason: 'period_label_not_found', complete: false },
-          moves: 0
+          moves: offset
         };
       }
 
-      var lastWeekDate = first.week_date;
-      while (weeks.length + skipped.length < limit) {
-        if (haderAllWeeksAbort) { stopReason = 'interrupted'; break; }
-        var step = await stepMadrasatiWeek(1);
-        if (!step.moved) { stopReason = step.reason || 'end_of_range'; break; }
-        moves++;
-        var weekDate = step.period && step.period.week_date;
-        if (!weekDate || weekDate <= lastWeekDate) { stopReason = 'week_not_advanced'; break; }
-        lastWeekDate = weekDate;
+      // Forward first: coming back then passes this week once, where going
+      // back first would pass every earlier week twice.
+      var legs = [{ direction: 1, count: after }, { direction: -1, count: before }];
+      var shownWeekDate = first.week_date;
+      var failed = false;
+      for (var l = 0; l < legs.length && !failed; l++) {
+        var leg = legs[l];
+        var read = 0;
+        while (read < leg.count) {
+          if (haderAllWeeksAbort) { stopReason = 'interrupted'; failed = true; break; }
+          var step = await stepMadrasatiWeek(leg.direction);
+          if (!step.moved) {
+            var reason = step.reason || 'end_of_range';
+            // The term ending on one side still leaves the other side to read.
+            if (reason === 'end_of_range') { stopReason = reason; break; }
+            stopReason = reason;
+            failed = true;
+            break;
+          }
+          offset += leg.direction;
+          var weekDate = step.period && step.period.week_date;
+          if (!weekDate || (leg.direction === 1 ? weekDate <= shownWeekDate : weekDate >= shownWeekDate)) {
+            stopReason = 'week_not_advanced';
+            failed = true;
+            break;
+          }
+          shownWeekDate = weekDate;
+          if (seen[weekDate]) continue;
+          seen[weekDate] = true;
+          read++;
 
-        var snapshot = await harvestScheduleForHader({ light: true });
-        if (!snapshot.success) {
-          if (snapshot.code !== 'schedule_empty') { stopReason = snapshot.code || 'harvest_failed'; break; }
-          // A holiday week has no cards; keep walking past it.
-          skipped.push(weekDate);
-          await report({ week_date: weekDate, empty: true });
-          continue;
+          var snapshot = await harvestScheduleForHader({ light: true });
+          if (!snapshot.success) {
+            if (snapshot.code !== 'schedule_empty') { stopReason = snapshot.code || 'harvest_failed'; failed = true; break; }
+            // A holiday week has no cards; keep walking past it.
+            skipped.push(weekDate);
+            await report({ week_date: weekDate, empty: true });
+            continue;
+          }
+          if (snapshot.week_source !== 'period' || snapshot.week_date !== weekDate) {
+            stopReason = 'week_not_advanced';
+            failed = true;
+            break;
+          }
+          var week = slimHaderWeek(snapshot);
+          weeks.push(week);
+          await report(week);
         }
-        if (snapshot.week_source !== 'period' || snapshot.week_date !== weekDate) {
-          stopReason = 'week_not_advanced';
-          break;
-        }
-        var week = slimHaderWeek(snapshot);
-        weeks.push(week);
-        await report(week);
       }
 
       return {
@@ -7911,7 +7972,7 @@
           stop_reason: stopReason,
           complete: stopReason === 'end_of_range' || stopReason === 'max_weeks'
         },
-        moves: moves
+        moves: offset
       };
     }
 
@@ -7939,7 +8000,11 @@
       var outcome = { result: null, moves: 0 };
       showHaderWorkBanner('حضر يقرأ أسابيع الجدول… لا تغلق هذه الصفحة، وسيعود الجدول لأسبوعك عند الانتهاء.');
       try {
-        outcome = await harvestAllWeeksForHader(message.harvestId, message.maxWeeks);
+        outcome = await harvestAllWeeksForHader(message.harvestId, {
+          maxWeeks: message.maxWeeks,
+          weeksBefore: message.weeksBefore,
+          weeksAfter: message.weeksAfter
+        });
       } catch (error) {
         outcome.result = { success: false, harvest_id: message.harvestId, error: error?.message || String(error) };
       }
@@ -7949,13 +8014,14 @@
         // reload replaces walking back week by week. Not when a preparation
         // interrupted the walk: a reload would kill that preparation, and it
         // moves the grid to its own weeks anyway.
-        if (outcome.moves > 1 && !haderAllWeeksAbort) {
+        if (Math.abs(outcome.moves) > 1 && !haderAllWeeksAbort) {
           hideHaderWorkBanner();
           window.location.reload();
           return;
         }
-        for (var i = 0; i < outcome.moves; i++) {
-          var back = await stepMadrasatiWeek(-1);
+        var backDirection = outcome.moves > 0 ? -1 : 1;
+        for (var i = 0; i < Math.abs(outcome.moves); i++) {
+          var back = await stepMadrasatiWeek(backDirection);
           if (!back.moved) break;
         }
       } finally {

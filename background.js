@@ -556,7 +556,9 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         const accepted = await sendToTab(found.tab.id, {
           action: 'HADER_HARVEST_ALL_WEEKS',
           harvestId: msg.harvestId,
-          maxWeeks: msg.maxWeeks
+          maxWeeks: msg.maxWeeks,
+          weeksBefore: msg.weeksBefore,
+          weeksAfter: msg.weeksAfter
         });
         sendResponse(accepted || { success: false, error: 'لم تستجب صفحة مدرستي. أعد تحميلها ثم حاول مرة أخرى.' });
       } catch (error) {

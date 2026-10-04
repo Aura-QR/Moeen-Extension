@@ -39,7 +39,9 @@
       operationId: data.operationId,
       ticket: data.ticket,
       harvestId: data.harvestId,
-      maxWeeks: data.maxWeeks
+      maxWeeks: data.maxWeeks,
+      weeksBefore: data.weeksBefore,
+      weeksAfter: data.weeksAfter
     }, (response) => {
       const error = chrome.runtime.lastError;
       post(replyFor(data.type), {
