@@ -63,8 +63,34 @@ async function findMadrasatiTab(openIfMissing) {
   return { tab: opened, opened: true };
 }
 
+async function waitForTabComplete(tabId, timeoutMs) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const tab = await chrome.tabs.get(tabId).catch(() => null);
+    if (!tab || tab.status === 'complete') return;
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
+}
+
+// A Madrasati tab can be without a live content script: it was opened before
+// the extension was reloaded or updated, or it is mid-reload (the week walk
+// returns by reloading). Chrome then fails with "Receiving end does not
+// exist". Wait for the page, give it the content script, and retry once.
 async function sendToTab(tabId, message) {
-  return chrome.tabs.sendMessage(tabId, message, { frameId: 0 });
+  await waitForTabComplete(tabId, 15000);
+  try {
+    return await chrome.tabs.sendMessage(tabId, message, { frameId: 0 });
+  } catch (error) {
+    if (!/Receiving end does not exist|Could not establish connection/i.test(String(error?.message || error))) {
+      throw error;
+    }
+    await chrome.scripting.executeScript({
+      target: { tabId, frameIds: [0] },
+      files: ['shared/constants.js', 'content.js']
+    });
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    return chrome.tabs.sendMessage(tabId, message, { frameId: 0 });
+  }
 }
 
 async function broadcastToHaderTabs(type, payload) {
