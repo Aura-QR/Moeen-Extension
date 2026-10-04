@@ -24,6 +24,7 @@
     if (type === 'HADER_GET_SCHEDULE') return 'HADER_SCHEDULE_RESULT';
     if (type === 'HADER_GET_ALL_WEEKS') return 'HADER_ALL_WEEKS_ACCEPTED';
     if (type === 'HADER_PREPARE_LESSONS') return 'HADER_PREPARATION_ACCEPTED';
+    if (type === 'HADER_SYNC_AUTH') return 'HADER_AUTH_SYNCED';
     return 'HADER_BRIDGE_RESULT';
   }
 
@@ -31,7 +32,7 @@
     if (event.source !== window || !isAllowedOrigin(event.origin)) return;
     const data = event.data;
     if (!data || data.source !== PAGE_SOURCE) return;
-    if (!['HADER_BRIDGE_PING', 'HADER_GET_SCHEDULE', 'HADER_GET_ALL_WEEKS', 'HADER_PREPARE_LESSONS'].includes(data.type)) return;
+    if (!['HADER_BRIDGE_PING', 'HADER_GET_SCHEDULE', 'HADER_GET_ALL_WEEKS', 'HADER_PREPARE_LESSONS', 'HADER_SYNC_AUTH'].includes(data.type)) return;
 
     chrome.runtime.sendMessage({
       action: data.type,
@@ -41,7 +42,9 @@
       harvestId: data.harvestId,
       maxWeeks: data.maxWeeks,
       weeksBefore: data.weeksBefore,
-      weeksAfter: data.weeksAfter
+      weeksAfter: data.weeksAfter,
+      token: data.token,
+      previousToken: data.previousToken
     }, (response) => {
       const error = chrome.runtime.lastError;
       post(replyFor(data.type), {

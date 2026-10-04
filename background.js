@@ -34,6 +34,62 @@ async function callBrowserTicketApi(path, body) {
   return { ok: response.ok, status: response.status, data };
 }
 
+const HADAR_AUTH_SESSION_KEY = globalThis.Moeen2_CONFIG?.AUTH_SESSION_KEY || 'HADAR_AUTH';
+
+function isHaderSiteUrl(url) {
+  try {
+    const { origin } = new URL(String(url || ''));
+    return /^https:\/\/(www\.)?haderedu\.com$/i.test(origin)
+      || /^https:\/\/([a-z0-9-]+\.)?moeen\.app$/i.test(origin)
+      || /^http:\/\/(localhost:300[01]|127\.0\.0\.1:3000)$/.test(origin);
+  } catch (_) {
+    return false;
+  }
+}
+
+// Signs the extension in with the account signed in on the Hader site, so a
+// teacher does not log in twice. The token is checked with the API before it
+// is kept; a site build pointed at another API simply does not sign in.
+async function syncAuthFromSite(msg) {
+  const stored = (await chrome.storage.local.get(HADAR_AUTH_SESSION_KEY))[HADAR_AUTH_SESSION_KEY] || null;
+  const token = typeof msg.token === 'string' ? msg.token.trim() : '';
+
+  if (!token) {
+    // Signed out on the site. Sign out here too, unless the extension was
+    // signed in on its own with a different account.
+    if (stored && msg.previousToken && stored.token === msg.previousToken) {
+      await chrome.storage.local.remove(HADAR_AUTH_SESSION_KEY);
+      return { success: true, signedIn: false };
+    }
+    return { success: true, signedIn: Boolean(stored?.isAuthenticated && stored?.token) };
+  }
+
+  if (stored?.isAuthenticated && stored.token === token) return { success: true, signedIn: true };
+
+  const me = await callHadarApi('/auth/me', { method: 'GET' }, token, 'Bearer');
+  const user = me.ok && me.data && (me.data.user || me.data.data?.user);
+  if (!user || !(user.id || user.email)) {
+    return { success: false, code: me.status === 401 ? 'invalid_token' : 'verify_failed', signedIn: Boolean(stored?.isAuthenticated) };
+  }
+
+  await chrome.storage.local.set({
+    [HADAR_AUTH_SESSION_KEY]: {
+      isAuthenticated: true,
+      token,
+      tokenType: 'Bearer',
+      user: {
+        id: user.id,
+        name: user.name || user.fullName || user.email,
+        email: user.email,
+        role: user.role
+      },
+      sessionCreatedAt: Date.now(),
+      source: 'site'
+    }
+  });
+  return { success: true, signedIn: true };
+}
+
 async function findMadrasatiTab(openIfMissing) {
   const tabs = await chrome.tabs.query({
     url: ['https://schools.madrasati.sa/*', 'https://external.madrasati.sa/*']
@@ -509,6 +565,18 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         sendResponse({ success: false, error: error?.message || String(error) });
       }
     })();
+    return true;
+  }
+
+  if (msg?.action === 'HADER_SYNC_AUTH') {
+    // Only the bridge on the Hader site may sign the extension in or out.
+    if (sender?.id !== chrome.runtime.id || !isHaderSiteUrl(sender?.url || sender?.tab?.url)) {
+      sendResponse({ success: false, code: 'forbidden' });
+      return true;
+    }
+    syncAuthFromSite(msg)
+      .then(sendResponse)
+      .catch((error) => sendResponse({ success: false, error: error?.message || String(error) }));
     return true;
   }
 

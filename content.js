@@ -8315,6 +8315,16 @@
           banner.innerHTML = '🔒 <strong>حضر</strong> — يرجى تسجيل الدخول من أيقونة الامتداد لتفعيل الامتداد';
           document.body && document.body.prepend ? document.body.prepend(banner) : (document.body ? document.body.insertBefore(banner, document.body.firstChild) : null);
         }
+        // Signing in on the Hader site signs the extension in too; start
+        // over then, so the teacher does not have to reload Madrasati.
+        if (isTopLevelPage() && isHadarWorkflowPath()) {
+          chrome.storage.onChanged.addListener(function onHadarSignIn(changes, area) {
+            var next = area === 'local' && changes[AUTH_SESSION_KEY] && changes[AUTH_SESSION_KEY].newValue;
+            if (!next || !next.isAuthenticated || !next.token) return;
+            chrome.storage.onChanged.removeListener(onHadarSignIn);
+            window.location.reload();
+          });
+        }
         return; // Stop all automation
       }
       // ── Authenticated: run boot ──
