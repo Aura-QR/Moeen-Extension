@@ -28,8 +28,9 @@ function addDays(date, days) {
   return d.toISOString().slice(0, 10);
 }
 
-/** A Madrasati grid that shows one week at a time. */
-function fakeMadrasati({ start, weeks, firstWeek, lastWeek }) {
+/** A Madrasati grid that shows one week at a time. `slots` gives a card's
+ * position as { token: [day, period] }; classroom and subject are fixed. */
+function fakeMadrasati({ start, weeks, firstWeek, lastWeek, slots = {} }) {
   const state = { week: start, visited: [start], prepared: [] };
 
   function selectFor(token) {
@@ -50,7 +51,17 @@ function fakeMadrasati({ start, weeks, firstWeek, lastWeek }) {
     document: {
       querySelectorAll: () => (weeks[state.week] || []).map(selectFor),
     },
-    readMadrasatiPeriod: () => ({ week_date: state.week }),
+    readMadrasatiPeriod: () => ({ week_date: state.week, label: 'الفترة ' + state.week }),
+    harvestScheduleForHader: async () => ({
+      success: true,
+      lessons: (weeks[state.week] || []).map((token) => ({
+        token,
+        day: (slots[token] || [0, 1])[0],
+        period: (slots[token] || [0, 1])[1],
+        classroom_id: '175048',
+        subject_id: 273,
+      })),
+    }),
     stepMadrasatiWeek: async (direction) => {
       const next = addDays(state.week, direction * 7);
       if (next < firstWeek || next > lastWeek) return { moved: false, reason: 'end_of_range' };
@@ -145,6 +156,27 @@ function lesson(id, token, weekDate) {
     check('the unreachable one fails on its own', result.results[1].status, 'error');
     check('and Madrasati is not written for it', state.prepared, ['A']);
     check('the teacher is still put back', state.week, '2026-10-04');
+  }
+
+  console.log('\n— the saved token no longer matches the card —');
+  {
+    const { state, stubs } = fakeMadrasati({
+      start: '2026-10-04',
+      weeks: { '2026-10-04': ['A'], '2026-10-11': ['B-new', 'D'] },
+      firstWeek: '2026-10-04',
+      lastWeek: '2026-10-11',
+      slots: { 'B-new': [2, 3], D: [2, 4] },
+    });
+    const { run, messages } = build(stubs);
+    const rotated = Object.assign(lesson(1, 'B-old', '2026-10-11'), {
+      day_of_week: 2, period_number: 3, classroom_id: '175048', subject_id: 273,
+    });
+    const unplaced = lesson(2, 'X-old', '2026-10-11');
+    await run({ operationId: 'op', ticket: 't', lessons: [rotated, unplaced] });
+    const result = messages.find((m) => m.action === 'HADER_BROWSER_PREPARATION_RESULT');
+    check('the card is found by its slot', result.results.map((r) => r.status), ['done', 'error']);
+    check('and prepared under its current token', state.prepared, ['B-new']);
+    check('without a slot there is nothing to match on', /لم أجد الحصة/.test(result.results[1].error), true);
   }
 
   console.log(failures ? `\n${failures} failed` : '\nAll passed');

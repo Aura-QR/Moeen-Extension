@@ -7965,6 +7965,28 @@
       return steps;
     }
 
+    // Card tokens may not survive a reload of Madrasati, so a token saved by an
+    // earlier harvest can miss the card now on screen. The slot (day, period,
+    // classroom, subject) is unique within a week and does survive; use it to
+    // find the card's current token.
+    async function resolveHaderLessonToken(lesson) {
+      if (findHaderLessonSelect(lesson.lesson_token)) return lesson.lesson_token;
+      if (lesson.day_of_week == null || lesson.period_number == null || !lesson.classroom_id) return lesson.lesson_token;
+      var day = Number(lesson.day_of_week);
+      var period = Number(lesson.period_number);
+      if (!Number.isInteger(day) || !Number.isInteger(period)) return lesson.lesson_token;
+      var shown = await harvestScheduleForHader({ light: true });
+      if (!shown.success) return lesson.lesson_token;
+      if (shown.lessons.some(function (item) { return item.token === lesson.lesson_token; })) return lesson.lesson_token;
+      var matches = shown.lessons.filter(function (item) {
+        return item.day === day
+          && item.period === period
+          && String(item.classroom_id) === String(lesson.classroom_id)
+          && (!lesson.subject_id || Number(item.subject_id) === Number(lesson.subject_id));
+      });
+      return matches.length === 1 ? matches[0].token : lesson.lesson_token;
+    }
+
     async function returnFromMadrasatiWeek(steps) {
       var direction = steps > 0 ? -1 : 1;
       for (var i = 0; i < Math.abs(steps); i++) {
@@ -7997,8 +8019,14 @@
                 }
               }
             }
-            var select = await waitForHaderLessonSelect(lesson.lesson_token, 30000);
-            if (!select) throw new Error('لم تعد الحصة موجودة في جدول مدرستي. حدّث الجدول في حضّر.');
+            var token = await resolveHaderLessonToken(lesson);
+            var select = await waitForHaderLessonSelect(token, 30000);
+            if (!select) {
+              var onScreen = readMadrasatiPeriod();
+              throw new Error('لم أجد الحصة في جدول مدرستي'
+                + (onScreen && onScreen.label ? ' (المعروض: ' + onScreen.label.replace(/^.*?(1[34]\d\d)/, '$1') + ')' : '')
+                + '. حدّث الجدول في حضّر ثم أعد المحاولة.');
+            }
             var option = Array.from(select.options).find(function (candidate) { return candidate.value === lesson.selection_value; });
             if (!option) throw new Error('الدرس المختار غير متاح لهذه الحصة في مدرستي. حدّث الجدول.');
             var modules = new Set(lesson.selected_modules || []);
@@ -8015,7 +8043,7 @@
               payload: { operation_id: message.operationId, done: index, total: message.lessons.length, current: lesson.selection_text }
             });
             await prefetchAILessonDataForCard({ select: select, div: card, selection: selection });
-            var ok = await silentPrepareLesson(lesson.lesson_token, selection, lesson.subject_id, lesson.school_madrasati_id, card);
+            var ok = await silentPrepareLesson(token, selection, lesson.subject_id, lesson.school_madrasati_id, card);
             if (!ok) throw new Error('رفضت مدرستي حفظ التحضير.');
             var scheduleCard = card && (card.querySelector('.schedule-card') || card);
             if (scheduleCard) {
