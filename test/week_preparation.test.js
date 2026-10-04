@@ -70,6 +70,8 @@ function fakeMadrasati({ start, weeks, firstWeek, lastWeek, slots = {} }) {
       return { moved: true, period: { week_date: next } };
     },
     injectDashboardUI: async () => {},
+    showHaderWorkBanner: () => {},
+    hideHaderWorkBanner: () => {},
     scanDashboardCards: async () => {},
     sleep: async () => {},
     setResourceEnabled: () => {},

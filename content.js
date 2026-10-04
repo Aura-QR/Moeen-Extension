@@ -7899,8 +7899,29 @@
       };
     }
 
+    // While حضر drives the Madrasati grid the page redraws week after week,
+    // which looks broken unless the teacher is told what is going on.
+    function showHaderWorkBanner(text) {
+      if (!isTopLevelPage() || !document.body) return;
+      var banner = document.getElementById('hader-work-banner');
+      if (!banner) {
+        banner = document.createElement('div');
+        banner.id = 'hader-work-banner';
+        banner.setAttribute('role', 'status');
+        banner.style.cssText = 'position:fixed;bottom:20px;left:50%;transform:translateX(-50%);z-index:999999;background:#0E7A5E;color:#fff;padding:12px 20px;border-radius:16px;font-family:system-ui,sans-serif;font-size:14px;font-weight:700;direction:rtl;box-shadow:0 12px 30px rgba(13,84,70,0.3);';
+        document.body.appendChild(banner);
+      }
+      banner.textContent = text;
+    }
+
+    function hideHaderWorkBanner() {
+      var banner = document.getElementById('hader-work-banner');
+      if (banner) banner.remove();
+    }
+
     async function runHaderAllWeeksHarvest(message) {
       var outcome = { result: null, moves: 0 };
+      showHaderWorkBanner('حضر يقرأ أسابيع الجدول… لا تغلق هذه الصفحة، وسيعود الجدول لأسبوعك عند الانتهاء.');
       try {
         outcome = await harvestAllWeeksForHader(message.harvestId, message.maxWeeks);
       } catch (error) {
@@ -7914,6 +7935,7 @@
           if (!back.moved) break;
         }
       } finally {
+        hideHaderWorkBanner();
         haderAllWeeksRunning = false;
       }
     }
@@ -8004,6 +8026,7 @@
       var lessons = message.lessons.slice().sort(function (left, right) {
         return String(left.week_date || '').localeCompare(String(right.week_date || ''));
       });
+      showHaderWorkBanner('حضر يحضّر ' + lessons.length + ' حصة… لا تغلق هذه الصفحة.');
       try {
         for (var index = 0; index < lessons.length; index++) {
           var lesson = lessons[index];
@@ -8071,6 +8094,7 @@
           // Put the teacher back on the week they were looking at.
           if (weekSteps) await returnFromMadrasatiWeek(weekSteps);
         } finally {
+          hideHaderWorkBanner();
           haderRemotePreparationRunning = false;
         }
       }
