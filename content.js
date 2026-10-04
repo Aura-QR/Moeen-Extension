@@ -7808,6 +7808,25 @@
     }
 
     var haderAllWeeksRunning = false;
+    // Set by a preparation request: the teacher is waiting on preparation,
+    // while the week walk is background work, so the walk yields.
+    var haderAllWeeksAbort = false;
+    var haderRemotePreparationStartedAt = 0;
+    // A preparation that has held the tab this long is assumed dead (a hung
+    // Madrasati request, say) and no longer blocks new ones.
+    var HADER_PREPARATION_STALE_MS = 15 * 60 * 1000;
+
+    function isHaderPreparationBusy() {
+      return haderRemotePreparationRunning
+        && Date.now() - haderRemotePreparationStartedAt < HADER_PREPARATION_STALE_MS;
+    }
+
+    async function waitForHaderAllWeeksToStop(timeoutMs) {
+      var deadline = Date.now() + timeoutMs;
+      while (haderAllWeeksRunning && Date.now() < deadline) {
+        await sleep(250);
+      }
+    }
 
     // Walks forward from the week on screen, harvesting each one, and streams
     // every week to حضّر as it is read. Returns how many steps it moved so the
@@ -7842,6 +7861,7 @@
 
       var lastWeekDate = first.week_date;
       while (weeks.length + skipped.length < limit) {
+        if (haderAllWeeksAbort) { stopReason = 'interrupted'; break; }
         var step = await stepMadrasatiWeek(1);
         if (!step.moved) { stopReason = step.reason || 'end_of_range'; break; }
         moves++;
@@ -8038,8 +8058,12 @@
         }
 
         if (message && message.action === 'HADER_HARVEST_ALL_WEEKS') {
-          if (haderAllWeeksRunning || haderRemotePreparationRunning) {
-            sendResponse({ success: false, error: 'توجد عملية جارية بالفعل في تبويب مدرستي. انتظر حتى تنتهي.' });
+          if (haderAllWeeksRunning) {
+            sendResponse({ success: false, code: 'busy', error: 'تحديث الأسابيع يعمل بالفعل في تبويب مدرستي. انتظر حتى ينتهي.' });
+            return true;
+          }
+          if (isHaderPreparationBusy()) {
+            sendResponse({ success: false, code: 'busy', error: 'يوجد تحضير جارٍ في تبويب مدرستي. حدّث الأسابيع بعد انتهائه.' });
             return true;
           }
           if (detectPageState() !== FLOW_STATES.DASHBOARD) {
@@ -8047,14 +8071,15 @@
             return true;
           }
           haderAllWeeksRunning = true;
+          haderAllWeeksAbort = false;
           sendResponse({ success: true, accepted: true });
           void runHaderAllWeeksHarvest(message);
           return true;
         }
 
         if (message && message.action === 'HADER_EXECUTE_BROWSER_PREPARATION') {
-          if (haderRemotePreparationRunning || haderAllWeeksRunning) {
-            sendResponse({ success: false, error: 'توجد عملية تحضير جارية بالفعل في هذا التبويب.' });
+          if (isHaderPreparationBusy()) {
+            sendResponse({ success: false, error: 'يوجد تحضير جارٍ بالفعل في تبويب مدرستي. انتظر حتى ينتهي.' });
             return true;
           }
           if (!Array.isArray(message.lessons) || !message.lessons.length) {
@@ -8062,8 +8087,17 @@
             return true;
           }
           haderRemotePreparationRunning = true;
+          haderRemotePreparationStartedAt = Date.now();
           sendResponse({ success: true, accepted: true });
-          void executeHaderBrowserPreparation(message);
+          void (async function () {
+            // Preparation outranks a background week walk: stop the walk,
+            // let it put the grid back, then prepare.
+            if (haderAllWeeksRunning) {
+              haderAllWeeksAbort = true;
+              await waitForHaderAllWeeksToStop(120000);
+            }
+            await executeHaderBrowserPreparation(message);
+          })();
           return true;
         }
 
