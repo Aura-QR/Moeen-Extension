@@ -4151,8 +4151,10 @@
           'ProjectId:', resolvedProjectId,
           'StartTime:', startTimeStr,
           'EndTime:', endTimeStr);
+      } else if (_shouldRunActivity) {
+        console.warn('[Moeen-2] Activity was enabled but no projectId was resolved — SaveLastLessonPlan will rely on homework/exam if available.');
       } else {
-        console.warn('[Moeen-2] No projectId — SaveLastLessonPlan will rely on homework/exam if available.');
+        console.log('[Moeen-2] Activity disabled — SaveLastLessonPlan relies on homework/exam/enrichment.');
       }
 
       // ── LectureClassLearningResources (Enrichment binding) ───────────────────────

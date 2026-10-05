@@ -34,25 +34,41 @@
     if (!data || data.source !== PAGE_SOURCE) return;
     if (!['HADER_BRIDGE_PING', 'HADER_GET_SCHEDULE', 'HADER_GET_ALL_WEEKS', 'HADER_PREPARE_LESSONS', 'HADER_SYNC_AUTH'].includes(data.type)) return;
 
-    chrome.runtime.sendMessage({
-      action: data.type,
+    // After the extension is reloaded or updated, this script stays on the page
+    // but can no longer reach the extension: chrome.runtime.id goes away and
+    // sendMessage throws "Extension context invalidated". Answer the page so it
+    // is not left waiting, and tell the teacher how to recover.
+    const replyContextLost = () => post(replyFor(data.type), {
       requestId: data.requestId,
-      operationId: data.operationId,
-      ticket: data.ticket,
-      harvestId: data.harvestId,
-      maxWeeks: data.maxWeeks,
-      weeksBefore: data.weeksBefore,
-      weeksAfter: data.weeksAfter,
-      token: data.token,
-      previousToken: data.previousToken
-    }, (response) => {
-      const error = chrome.runtime.lastError;
-      post(replyFor(data.type), {
-        requestId: data.requestId,
-        ...(response || {}),
-        ...(error ? { success: false, error: error.message } : {})
-      });
+      success: false,
+      code: 'extension_reloaded',
+      error: 'تم تحديث إضافة حضر. حدّث هذه الصفحة ثم أعد المحاولة.'
     });
+    if (!chrome.runtime?.id) { replyContextLost(); return; }
+
+    try {
+      chrome.runtime.sendMessage({
+        action: data.type,
+        requestId: data.requestId,
+        operationId: data.operationId,
+        ticket: data.ticket,
+        harvestId: data.harvestId,
+        maxWeeks: data.maxWeeks,
+        weeksBefore: data.weeksBefore,
+        weeksAfter: data.weeksAfter,
+        token: data.token,
+        previousToken: data.previousToken
+      }, (response) => {
+        const error = chrome.runtime.lastError;
+        post(replyFor(data.type), {
+          requestId: data.requestId,
+          ...(response || {}),
+          ...(error ? { success: false, error: error.message } : {})
+        });
+      });
+    } catch (_) {
+      replyContextLost();
+    }
   });
 
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
