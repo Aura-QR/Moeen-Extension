@@ -2739,8 +2739,34 @@
           },
           body: qBody.toString()
         });
-        let qHtml = await qRes.text();
-        try { const j = JSON.parse(qHtml); if (j && typeof j.html === 'string') qHtml = j.html; } catch (e) { }
+        const qRaw = await qRes.text();
+        const qSet = new Set();
+        // The endpoint answers application/json, not bare HTML. The question list can
+        // arrive as HTML inside any string field, or as an array of question objects —
+        // walk the whole payload and collect both.
+        let qHtml = qRaw;
+        let qJsonKeys = '';
+        try {
+          const j = JSON.parse(qRaw);
+          qJsonKeys = j && typeof j === 'object' ? Object.keys(j).slice(0, 12).join(',') : typeof j;
+          const htmlParts = [];
+          (function walk(node, depth) {
+            if (node == null || depth > 8) return;
+            if (typeof node === 'string') {
+              if (node.indexOf('<') !== -1) htmlParts.push(node);
+              return;
+            }
+            if (Array.isArray(node)) { node.forEach(function (n) { walk(n, depth + 1); }); return; }
+            if (typeof node !== 'object') return;
+            const keys = Object.keys(node);
+            const qIdKey = keys.find(function (k) { return /^(question_?id|qid)$/i.test(k); });
+            const looksLikeQuestion = keys.some(function (k) { return /question|difficult|typecode|text/i.test(k); });
+            const idKey = qIdKey || (looksLikeQuestion ? keys.find(function (k) { return /^id$/i.test(k); }) : '');
+            if (idKey && /^\d{4,12}$/.test(String(node[idKey]))) qSet.add(Number(node[idKey]));
+            keys.forEach(function (k) { walk(node[k], depth + 1); });
+          })(j, 0);
+          qHtml = htmlParts.join('\n');
+        } catch (e) { }
         // Try multiple ID extraction patterns for the Q-bank HTML
         const qPatterns = [
           /data-questionid=["'](\d{4,12})["']/gi,
@@ -2752,13 +2778,20 @@
           /class=["'][^"']*addQuestion[^"']*["'][^>]*data-id=["'](\d{4,12})["']/gi,
           /data-id=["'](\d{4,12})["'][^>]*class=["'][^"']*question/gi
         ];
-        const qSet = new Set();
         for (const pat of qPatterns) {
           let m; pat.lastIndex = 0;
           while ((m = pat.exec(qHtml)) !== null) qSet.add(Number(m[1]));
         }
         questionIds = [...qSet].slice(0, 1); // one question per assignment (competitor pattern)
         console.log('[Moeen-2] Homework: AddQuestionListPaging found', qSet.size, 'question(s) → using:', questionIds);
+        if (qSet.size === 0) {
+          // Leave enough of the response in the log to fix the parser from a real run.
+          console.log('[Moeen-2] Homework: AddQuestionListPaging status', qRes.status,
+            '| content-type:', qRes.headers.get('content-type'),
+            '| json keys:', qJsonKeys || '(not json)',
+            '| eschoolId:', schoolId,
+            '| body preview:', qRaw.slice(0, 1200));
+        }
       } catch (e) {
         console.warn('[Moeen-2] Homework: AddQuestionListPaging failed', e);
       }
