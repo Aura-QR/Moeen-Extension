@@ -7365,6 +7365,41 @@
     setFinalSaveButtonDetector(findFinalSaveButtonSync);
     var haderRemotePreparationRunning = false;
 
+    // The Madrasati teacher signed in to this page. Madrasati's menu config
+    // carries it: `user: { name: "…", sub: [{ url:
+    // "/TeacherProfile/My?schoolId=…&amp;userId=<32 hex>" }] }`. حضّر links
+    // each Hader account to one Madrasati teacher by this id.
+    var HADER_MADRASATI_USER_ID_RE = /TeacherProfile\/My\?[^"'<>\s]*?userId=([a-f0-9]{32})/i;
+    var HADER_MADRASATI_USER_NAME_RE = /\buser\s*:\s*\{[^{}]*?\bname\s*:\s*"([^"]{1,200})"/;
+    var haderMadrasatiUser = null;
+
+    function readMadrasatiUser() {
+      if (haderMadrasatiUser) return haderMadrasatiUser;
+      var sources = [];
+      document.querySelectorAll('a[href*="userId="]').forEach(function (anchor) {
+        sources.push(anchor.getAttribute('href') || '');
+      });
+      document.querySelectorAll('script:not([src])').forEach(function (script) {
+        sources.push(script.textContent || '');
+      });
+      var id = '';
+      var name = '';
+      for (var i = 0; i < sources.length && !(id && name); i++) {
+        if (!id) {
+          var idMatch = sources[i].match(HADER_MADRASATI_USER_ID_RE);
+          if (idMatch) id = idMatch[1].toUpperCase();
+        }
+        if (!name) {
+          var nameMatch = sources[i].match(HADER_MADRASATI_USER_NAME_RE);
+          if (nameMatch) name = nameMatch[1].trim();
+        }
+      }
+      if (!id) return { madrasati_user_id: null, madrasati_user_name: null };
+      // The signed-in teacher cannot change without a page load.
+      haderMadrasatiUser = { madrasati_user_id: id, madrasati_user_name: name || null };
+      return haderMadrasatiUser;
+    }
+
     function haderExtractSchoolId(card) {
       var cell = card.closest('td') || card.parentElement;
       var anchors = cell ? cell.querySelectorAll('a') : [];
@@ -7594,6 +7629,7 @@
       }
       var captureComplete = missingCoreCount === 0 && lessons.length === sourceLessonCardCount;
       var period = readMadrasatiPeriod();
+      var madrasatiUser = readMadrasatiUser();
       return {
         success: true,
         week_date: (period && period.week_date) || haderWeekStart(),
@@ -7606,7 +7642,9 @@
         source_card_count: sourceLessonCardCount + activities.length,
         captured_card_count: lessons.length + activities.length,
         missing_card_count: missingCoreCount,
-        capture_complete: captureComplete
+        capture_complete: captureComplete,
+        madrasati_user_id: madrasatiUser.madrasati_user_id,
+        madrasati_user_name: madrasatiUser.madrasati_user_name
       };
     }
 
@@ -7854,7 +7892,9 @@
         activities: snapshot.activities || [],
         lesson_count: (snapshot.lessons || []).length,
         invalid_count: snapshot.invalid_count || 0,
-        capture_complete: snapshot.capture_complete
+        capture_complete: snapshot.capture_complete,
+        madrasati_user_id: snapshot.madrasati_user_id || null,
+        madrasati_user_name: snapshot.madrasati_user_name || null
       };
     }
 
@@ -8231,6 +8271,11 @@
           void harvestScheduleForHader().then(sendResponse).catch(function (error) {
             sendResponse({ success: false, error: error?.message || String(error) });
           });
+          return true;
+        }
+
+        if (message && message.action === 'HADER_GET_MADRASATI_USER') {
+          sendResponse(Object.assign({ success: true }, readMadrasatiUser()));
           return true;
         }
 

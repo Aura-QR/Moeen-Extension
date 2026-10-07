@@ -649,9 +649,23 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       let claimedLessons = [];
       try {
         if (!msg.operationId || !msg.ticket) throw new Error('بيانات تفويض التحضير ناقصة.');
+        // The claim names the Madrasati teacher signed in to the tab that
+        // will write, so the server can hold each Hader account to one
+        // teacher. A missing tab is reported after the claim, which lets the
+        // failure path below release the reserved quota.
+        const found = await findMadrasatiTab(false);
+        const madrasatiUser = found.tab
+          ? await sendToTab(found.tab.id, { action: 'HADER_GET_MADRASATI_USER' }).catch(() => null)
+          : null;
         const claim = await callBrowserTicketApi(
           '/extension/preparations/' + encodeURIComponent(msg.operationId) + '/claim',
-          { ticket: msg.ticket }
+          {
+            ticket: msg.ticket,
+            ...(madrasatiUser?.madrasati_user_id ? {
+              madrasati_user_id: madrasatiUser.madrasati_user_id,
+              madrasati_user_name: madrasatiUser.madrasati_user_name || null
+            } : {})
+          }
         );
         if (!claim.ok || !claim.data?.success) {
           throw new Error(claim.data?.message || 'تعذر اعتماد عملية التحضير من الخادم.');
@@ -664,7 +678,6 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
         claimedLessons = Array.isArray(claim.data.lessons) ? claim.data.lessons : [];
 
-        const found = await findMadrasatiTab(false);
         if (!found.tab) {
           throw new Error('افتح جدول المعلم في مدرستي أولًا، ثم أعد طلب التحضير.');
         }
