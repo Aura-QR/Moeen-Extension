@@ -1892,6 +1892,9 @@
           added++;
         }
         updateDashboardCounter();
+        void saveShownWeekToHader();
+        // The poll runs every 1.5s; leave a running preparation's progress alone.
+        if (haderRemotePreparationRunning) return;
         var total = document.querySelectorAll('.Moeen-2-dashboard-select').length;
         if (total) {
           updateDashboardStatus("اختر درساً لكل حصة ثم اضغط «حضر» — " + total + " حصة متاحة", "info");
@@ -4929,60 +4932,160 @@
         }
       }
 
-      // Generate up to three lessons at once. Madrasati writes remain ordered
-      // below because their before/after ProjectId snapshots must never overlap.
-      // This is a pipeline: saving lesson 1 starts as soon as its AI data is
-      // ready while lessons 2+ continue generating in the background.
-      updateDashboardStatus(
-        usingBrowserFallback
-          ? "🖥️ جاري التحضير داخل المتصفح لأن الخدمة السحابية غير متاحة..."
-          : "⚡ جاري تجهيز المحتوى بالتوازي قبل الحفظ...",
-        usingBrowserFallback ? "warning" : "loading"
-      );
-      var aiPrefetchPromises = scheduleWithConcurrency(
-        tokensToPrepare,
-        3,
-        function (item) { return prefetchAILessonDataForCard(item); }
-      );
-
-      var _saveIdx = 0;
-      for (var item of tokensToPrepare) {
-        _saveIdx++;
-        updateDashboardStatus(
-          "⏳ جاري تحضير حصة " + _saveIdx + " من " + tokensToPrepare.length + "...",
-          "loading"
-        );
-        try {
-          // Join the already-running background task for this lesson. Usually
-          // this resolves immediately because selection-time prefetch cached it.
-          await aiPrefetchPromises[_saveIdx - 1];
-
-          var success = await silentPrepareLesson(item.token, item.selection, item.subjectId, item.realSchoolId, item.div);
-
-          if (success) {
-            item.select.style.borderColor = '#1a9448';
-            item.select.style.background = 'rgba(26,148,72,0.04)';
-            successCount++;
-          } else {
-            item.select.style.borderColor = '#c0392b';
-            item.select.style.background = 'rgba(192,57,43,0.08)';
-          }
-        } catch (err) {
-          console.error("[Moeen-2] prep failed for", item.token, err);
-          item.select.style.borderColor = '#c0392b';
-          item.select.style.background = 'rgba(192,57,43,0.08)';
-        }
-      }
-
+      var outcome = await prepareDashboardThroughServer(tokensToPrepare);
       var _total = tokensToPrepare.length;
-      if (successCount === _total) {
-        updateDashboardStatus("✅ تم حفظ " + successCount + " حصة بنجاح! جاري إعادة تحميل الجدول...", "success");
+      if (outcome.stopped && outcome.done === 0 && outcome.failed === 0) {
+        updateDashboardStatus("❌ " + outcome.stopped, "error");
+      } else if (outcome.done === _total) {
+        updateDashboardStatus("✅ تم حفظ " + outcome.done + " حصة بنجاح! جاري إعادة تحميل الجدول...", "success");
         setTimeout(() => window.location.reload(), 2000);
-      } else if (successCount > 0) {
-        updateDashboardStatus("⚠️ تم حفظ " + successCount + " من " + _total + " حصة — بعض الحصص لم تكتمل، راجعها يدوياً", "warning");
+      } else if (outcome.done > 0) {
+        updateDashboardStatus(
+          "⚠️ تم حفظ " + outcome.done + " من " + _total + " حصة"
+            + (outcome.stopped ? " — " + outcome.stopped : " — بعض الحصص لم تكتمل، راجعها يدوياً"),
+          "warning"
+        );
       } else {
-        updateDashboardStatus("❌ تعذّر تحضير الحصص — تحقق من اتصالك وحاول مجدداً", "error");
+        updateDashboardStatus("❌ " + (outcome.stopped || "تعذّر تحضير الحصص — تحقق من اتصالك وحاول مجدداً"), "error");
       }
+    }
+
+    // The «حضر» button used to prepare every selected lesson after a single
+    // plan check and never reported back, so the daily and monthly limits and
+    // the Madrasati account link never applied to it. It now goes through the
+    // same server operation as preparation started from the Hader site:
+    // authorize (reserves quota, enforces limits) → claim (checks the Madrasati
+    // teacher) → prepare in this tab → complete (counts the lessons that
+    // succeeded). A refusal at any step stops before Madrasati is written.
+    var HADER_OPERATION_MAX_LESSONS = 10;
+
+    function haderDashboardModules() {
+      var modules = [];
+      if (getResourceEnabled('activity')) modules.push('assignment');
+      if (getResourceEnabled('homework')) modules.push('homework');
+      if (getResourceEnabled('exam')) modules.push('exam');
+      if (getResourceEnabled('enrichment')) modules.push('enrichment');
+      return modules.length ? modules : ['assignment'];
+    }
+
+    function haderCardClassroomId(div) {
+      var id = String(div.getAttribute('data-class-id') || '').trim();
+      if (id) return id;
+      var cell = div.closest('td') || div.parentElement;
+      var anchors = cell ? cell.querySelectorAll('a[href]') : [];
+      for (var i = 0; i < anchors.length; i++) {
+        var match = String(anchors[i].href || '').match(/classroomId=(\d+)/i);
+        if (match) return match[1];
+      }
+      return '';
+    }
+
+    function haderOperationRequestId() {
+      var random = (typeof crypto !== 'undefined' && crypto.randomUUID)
+        ? crypto.randomUUID()
+        : Date.now() + '-' + Math.random().toString(36).slice(2);
+      return 'madrasati:' + random;
+    }
+
+    function haderApiMessage(response, fallback) {
+      return (response && response.data && response.data.message)
+        || (response && response.error)
+        || fallback;
+    }
+
+    async function prepareDashboardThroughServer(tokensToPrepare) {
+      var outcome = { done: 0, failed: 0, stopped: '' };
+      if (isHaderPreparationBusy()) {
+        outcome.stopped = 'يوجد تحضير جارٍ بالفعل في هذه الصفحة. انتظر حتى ينتهي.';
+        return outcome;
+      }
+      if (haderAllWeeksRunning) {
+        haderAllWeeksAbort = true;
+        await waitForHaderAllWeeksToStop(120000);
+      }
+
+      var shown = readMadrasatiPeriod();
+      var weekDate = shown && shown.week_date ? shown.week_date : null;
+      var modules = haderDashboardModules();
+      var identity = readMadrasatiUser();
+      var itemsByToken = {};
+      var lessons = tokensToPrepare.map(function (item) {
+        itemsByToken[item.token] = item;
+        var treeSubjectId = Number(String(item.selection.treeValue).split(',')[0]);
+        var lesson = {
+          lesson_token: item.token,
+          selection_value: item.selection.treeValue,
+          selection_text: item.selection.treeText,
+          // The server requires the lesson tree's subject, as the site sends.
+          subject_id: treeSubjectId || Number(item.subjectId) || 0,
+          classroom_id: haderCardClassroomId(item.div),
+          school_madrasati_id: String(item.realSchoolId || '').toUpperCase(),
+          selected_modules: modules
+        };
+        if (weekDate) lesson.week_date = weekDate;
+        return lesson;
+      });
+
+      for (var start = 0; start < lessons.length && !outcome.stopped; start += HADER_OPERATION_MAX_LESSONS) {
+        var batch = lessons.slice(start, start + HADER_OPERATION_MAX_LESSONS);
+        updateDashboardStatus('🔐 جاري التحقق من رصيدك في حضر...', 'loading');
+        var authorization = await sendRuntimeMessage({
+          action: 'HADER_AUTHORIZE_PREPARATION',
+          clientRequestId: haderOperationRequestId(),
+          lessons: batch
+        });
+        if (!authorization || !authorization.ok || !authorization.data || !authorization.data.success) {
+          outcome.stopped = haderApiMessage(authorization, 'تعذر الحصول على إذن التحضير من حضر. تحقق من اتصالك وحاول مجدداً.');
+          break;
+        }
+
+        var operationId = authorization.data.operation_id;
+        var ticket = authorization.data.ticket;
+        var claimBody = { ticket: ticket };
+        if (identity && identity.madrasati_user_id) {
+          claimBody.madrasati_user_id = identity.madrasati_user_id;
+          claimBody.madrasati_user_name = identity.madrasati_user_name || null;
+        }
+        var claim = await sendRuntimeMessage({
+          action: 'HADER_PREPARATION_TICKET',
+          step: 'claim',
+          operationId: operationId,
+          body: claimBody
+        });
+        if (!claim || !claim.ok || !claim.data || !claim.data.success) {
+          // A refused claim fails the operation on the server, which releases
+          // the quota it reserved.
+          outcome.stopped = haderApiMessage(claim, 'رفض حضر بدء التحضير لهذا الحساب.');
+          break;
+        }
+        if (claim.data.already_completed) continue;
+        var claimed = Array.isArray(claim.data.lessons) ? claim.data.lessons : [];
+
+        // Generate AI content for the batch three at a time; each lesson's own
+        // prefetch inside executeHaderBrowserPreparation joins the request
+        // already in flight instead of starting another.
+        scheduleWithConcurrency(
+          claimed.map(function (lesson) { return itemsByToken[lesson.lesson_token]; }).filter(Boolean),
+          3,
+          function (item) { return prefetchAILessonDataForCard(item); }
+        );
+
+        haderRemotePreparationRunning = true;
+        haderRemotePreparationStartedAt = Date.now();
+        var run = await executeHaderBrowserPreparation({ operationId: operationId, ticket: ticket, lessons: claimed });
+
+        var tokensById = {};
+        claimed.forEach(function (lesson) { tokensById[lesson.preparation_id] = lesson.lesson_token; });
+        run.results.forEach(function (result) {
+          var item = itemsByToken[tokensById[result.preparation_id]];
+          var ok = result.status === 'done';
+          if (ok) outcome.done++; else outcome.failed++;
+          if (!item) return;
+          item.select.style.borderColor = ok ? '#1a9448' : '#c0392b';
+          item.select.style.background = ok ? 'rgba(26,148,72,0.04)' : 'rgba(192,57,43,0.08)';
+        });
+      }
+      return outcome;
     }
     // src/content/dashboard-storage-helpers.js
     async function getDashboardSelectionForCurrentLesson() {
@@ -7883,6 +7986,39 @@
       return { moved: false, reason: 'end_of_range' };
     }
 
+    // Saves the week on screen to Hader, so the weekly plan and reports have it
+    // even for a teacher who only prepares from inside Madrasati, which is
+    // always the case in the mobile app. Once per week per page load, and
+    // quiet on failure: a teacher without a plan simply has nothing saved.
+    var haderSavedWeeks = {};
+
+    async function saveShownWeekToHader() {
+      if (haderAllWeeksRunning || haderRemotePreparationRunning) return;
+      var period = readMadrasatiPeriod();
+      if (!period || !period.week_date || haderSavedWeeks[period.week_date]) return;
+      haderSavedWeeks[period.week_date] = true;
+      var week = await harvestScheduleForHader({ light: true });
+      if (!week.success || !week.timetable || !week.timetable.length) return;
+      if (week.week_source !== 'period' || week.week_date !== period.week_date) {
+        // The grid moved while it was being read; try again on the next scan.
+        delete haderSavedWeeks[period.week_date];
+        return;
+      }
+      var response = await sendRuntimeMessage({
+        action: 'HADER_IMPORT_SHOWN_WEEK',
+        week: {
+          week_date: week.week_date,
+          timetable: week.timetable,
+          replace_week: week.capture_complete === true,
+          madrasati_user_id: week.madrasati_user_id || null,
+          madrasati_user_name: week.madrasati_user_name || null
+        }
+      });
+      if (!response || !response.ok) {
+        console.info('[حضر] The week on screen was not saved to Hader:', response && (response.status || response.error));
+      }
+    }
+
     function slimHaderWeek(snapshot) {
       return {
         week_date: snapshot.week_date,
@@ -8184,6 +8320,7 @@
 
     async function executeHaderBrowserPreparation(message) {
       var results = [];
+      var completion = null;
       // Net weeks moved away from where the teacher left Madrasati.
       var weekSteps = 0;
       // Group by week so the grid moves at most once per week. Lessons without
@@ -8226,6 +8363,7 @@
             select.dispatchEvent(new Event('change', { bubbles: true }));
             var card = select.closest('div[data-data]') || select.parentElement;
             var selection = { treeValue: lesson.selection_value, treeText: lesson.selection_text };
+            updateDashboardStatus('⏳ جاري تحضير حصة ' + (index + 1) + ' من ' + lessons.length + '...', 'loading');
             await sendRuntimeMessage({
               action: 'HADER_BROWSER_PREPARATION_PROGRESS',
               payload: { operation_id: message.operationId, done: index, total: message.lessons.length, current: lesson.selection_text }
@@ -8250,7 +8388,7 @@
         }
       } finally {
         try {
-          await sendRuntimeMessage({
+          completion = await sendRuntimeMessage({
             action: 'HADER_BROWSER_PREPARATION_RESULT',
             operationId: message.operationId,
             ticket: message.ticket,
@@ -8263,6 +8401,7 @@
           haderRemotePreparationRunning = false;
         }
       }
+      return { results: results, completion: completion };
     }
 
     if (isContextAlive()) {

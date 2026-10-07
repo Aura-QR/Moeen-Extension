@@ -644,6 +644,66 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     return true;
   }
 
+  // The «حضر» button inside Madrasati asks for the same server operation the
+  // Hader site uses, so the plan, the daily and monthly limits and the
+  // Madrasati account link apply to it too.
+  if (msg?.action === 'HADER_AUTHORIZE_PREPARATION') {
+    (async () => {
+      const stored = (await chrome.storage.local.get(HADAR_AUTH_SESSION_KEY))[HADAR_AUTH_SESSION_KEY];
+      if (!stored?.isAuthenticated || !stored.token) {
+        sendResponse({ ok: false, status: 401, data: { message: 'سجّل الدخول إلى حضر أولاً.' } });
+        return;
+      }
+      sendResponse(await callHadarApi('/extension/preparations/authorize', {
+        method: 'POST',
+        body: JSON.stringify({ client_request_id: msg.clientRequestId, lessons: msg.lessons || [] })
+      }, stored.token, stored.tokenType));
+    })().catch((error) => sendResponse({ ok: false, status: 0, error: error?.message || String(error) }));
+    return true;
+  }
+
+  // The week on screen in Madrasati, saved so the weekly plan and reports
+  // have it without a sync from the Hader site.
+  if (msg?.action === 'HADER_IMPORT_SHOWN_WEEK') {
+    (async () => {
+      const stored = (await chrome.storage.local.get(HADAR_AUTH_SESSION_KEY))[HADAR_AUTH_SESSION_KEY];
+      const week = msg.week || {};
+      if (!stored?.isAuthenticated || !stored.token || !week.week_date || !Array.isArray(week.timetable)) {
+        sendResponse({ ok: false, status: 0 });
+        return;
+      }
+      sendResponse(await callHadarApi('/extension/schedule/import', {
+        method: 'POST',
+        body: JSON.stringify({
+          week_date: week.week_date,
+          timetable: week.timetable,
+          replace_week: week.replace_week === true,
+          ...(week.madrasati_user_id ? {
+            madrasati_user_id: week.madrasati_user_id,
+            madrasati_user_name: week.madrasati_user_name || null
+          } : {})
+        })
+      }, stored.token, stored.tokenType));
+    })().catch((error) => sendResponse({ ok: false, status: 0, error: error?.message || String(error) }));
+    return true;
+  }
+
+  // claim and complete authenticate with the operation's ticket, not the
+  // teacher's token.
+  if (msg?.action === 'HADER_PREPARATION_TICKET') {
+    if (!['claim', 'complete'].includes(msg.step) || !msg.operationId) {
+      sendResponse({ ok: false, status: 0, error: 'Unknown preparation step.' });
+      return true;
+    }
+    callBrowserTicketApi(
+      '/extension/preparations/' + encodeURIComponent(msg.operationId) + '/' + msg.step,
+      msg.body || {}
+    )
+      .then(sendResponse)
+      .catch((error) => sendResponse({ ok: false, status: 0, error: error?.message || String(error) }));
+    return true;
+  }
+
   if (msg?.action === 'HADER_PREPARE_LESSONS') {
     (async () => {
       let claimedLessons = [];
