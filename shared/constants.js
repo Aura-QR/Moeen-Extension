@@ -9,9 +9,9 @@
     AUTH_SESSION_KEY: 'HADAR_AUTH',
     // Features that ship switched off until they are cleared for release.
     FEATURES: Object.freeze({
-      // «حفظ في فصولي» on Madrasati's student list. Turn on only after the
-      // extension and site privacy policies cover student names.
-      CLASSES_IMPORT: false
+      // «حفظ في فصولي» on Madrasati's student list. On since the extension
+      // and site privacy policies cover student names (2026-10-23).
+      CLASSES_IMPORT: true
     }),
     STORAGE_KEYS: Object.freeze({
       AUTOMATION_STATE: 'automationState',
