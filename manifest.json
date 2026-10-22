@@ -83,6 +83,17 @@
     },
     {
       "matches": [
+        "https://schools.madrasati.sa/SchoolManagment/Actions/MyStudents*"
+      ],
+      "js": [
+        "shared/constants.js",
+        "shared/classes_import_core.js",
+        "classes_import.js"
+      ],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
         "http://localhost:3000/*",
         "http://localhost:3001/*",
         "http://127.0.0.1:3000/*",

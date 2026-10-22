@@ -7,6 +7,12 @@
     API_BASE_URL: 'https://api.haderedu.com/api',
     API_ORIGIN: 'https://api.haderedu.com',
     AUTH_SESSION_KEY: 'HADAR_AUTH',
+    // Features that ship switched off until they are cleared for release.
+    FEATURES: Object.freeze({
+      // «حفظ في فصولي» on Madrasati's student list. Turn on only after the
+      // extension and site privacy policies cover student names.
+      CLASSES_IMPORT: false
+    }),
     STORAGE_KEYS: Object.freeze({
       AUTOMATION_STATE: 'automationState',
       DEFAULT_SELECTOR: 'defaultSelector',

@@ -90,6 +90,40 @@ async function syncAuthFromSite(msg) {
   return { success: true, signedIn: true };
 }
 
+// «حفظ في فصولي»: saves classes read on Madrasati's «قائمة الطلاب» page to
+// Hader. A class whose name already exists in «فصولي» gets its names
+// replaced; otherwise a new class is created. Only names are sent.
+async function saveClassesToHader(classes) {
+  const auth = (await chrome.storage.local.get(HADAR_AUTH_SESSION_KEY))[HADAR_AUTH_SESSION_KEY] || null;
+  if (!auth?.isAuthenticated || !auth.token) return { success: false, code: 'not_signed_in' };
+
+  const list = await callHadarApi('/classes', { method: 'GET' }, auth.token, auth.tokenType);
+  if (list.status === 401) return { success: false, code: 'not_signed_in' };
+  if (!list.ok) return { success: false, code: 'list_failed' };
+  const existing = new Map((list.data?.data || []).map((item) => [String(item.name).trim(), item.id]));
+
+  let saved = 0;
+  for (const item of (Array.isArray(classes) ? classes : []).slice(0, 40)) {
+    const name = String(item?.name || '').trim().slice(0, 60);
+    const students = (Array.isArray(item?.students) ? item.students : [])
+      .map((value) => String(value || '').trim()).filter(Boolean).slice(0, 80);
+    if (!name || !students.length) continue;
+
+    const id = existing.get(name);
+    const result = id
+      ? await callHadarApi(`/classes/${id}`, { method: 'PUT', body: JSON.stringify({ students }) }, auth.token, auth.tokenType)
+      : await callHadarApi('/classes', { method: 'POST', body: JSON.stringify({ name, grade: name, students }) }, auth.token, auth.tokenType);
+    if (result.status === 401) return { success: false, code: 'not_signed_in' };
+    if (!result.ok) {
+      const firstError = result.data?.errors && Object.values(result.data.errors)[0];
+      return { success: false, code: 'save_failed', saved, message: (Array.isArray(firstError) ? firstError[0] : null) || result.data?.message };
+    }
+    saved++;
+  }
+
+  return { success: true, saved };
+}
+
 async function findMadrasatiTab(openIfMissing) {
   const tabs = await chrome.tabs.query({
     url: ['https://schools.madrasati.sa/*', 'https://external.madrasati.sa/*']
@@ -575,6 +609,19 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       return true;
     }
     syncAuthFromSite(msg)
+      .then(sendResponse)
+      .catch((error) => sendResponse({ success: false, error: error?.message || String(error) }));
+    return true;
+  }
+
+  if (msg?.action === 'HADER_SAVE_CLASSES') {
+    // Only our own content script on Madrasati may send class lists.
+    const from = String(sender?.url || sender?.tab?.url || '');
+    if (sender?.id !== chrome.runtime.id || !/^https:\/\/schools\.madrasati\.sa\//i.test(from)) {
+      sendResponse({ success: false, code: 'forbidden' });
+      return true;
+    }
+    saveClassesToHader(msg.classes)
       .then(sendResponse)
       .catch((error) => sendResponse({ success: false, error: error?.message || String(error) }));
     return true;
