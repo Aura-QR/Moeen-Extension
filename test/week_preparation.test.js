@@ -78,7 +78,8 @@ function fakeMadrasati({ start, weeks, firstWeek, lastWeek, slots = {} }) {
     scanDashboardCards: async () => {},
     sleep: async () => {},
     setResourceEnabled: () => {},
-    prefetchAILessonDataForCard: async () => {},
+    prefetchAILessonDataForCard: async () => ({ LectureClassPreparationText: 'تمهيد' }),
+    preparedContentForBackend: (d) => (d ? { preparation_text: d.LectureClassPreparationText } : null),
     silentPrepareLesson: async (token) => { state.prepared.push(token); return true; },
   };
   return { state, stubs };

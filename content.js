@@ -239,6 +239,25 @@
       };
     }
 
+    /** The prepared lesson text in Hader's field names (website-started preparations). */
+    function preparedContentForBackend(d) {
+      if (!d) return null;
+      var text = function (v) { return typeof v === 'string' ? v.slice(0, 3000) : ''; };
+      var list = function (v) { return Array.isArray(v) ? v.filter(function (x) { return typeof x === 'string'; }).slice(0, 20) : []; };
+      return {
+        preparation_text: text(d.LectureClassPreparationText || d.prep),
+        goals: text(typeof d.goals === 'string' ? d.goals : ''),
+        closure: text(d.LectureClassCloseText || d.closure),
+        vocabulary: text(d.LessonVocabulary || d.vocabulary),
+        thinking_skills: text(d.ThinkingSkills || d.thinkingSkills),
+        teacher_note: text(d.TeacherNote || d.teacherNote),
+        strategies: list(d.strategies),
+        tools: list(d.tools),
+        homework: text(d.homework),
+        enrichment: text(d.enrichment)
+      };
+    }
+
     async function logPreparationToBackend(status, errorMessage) {
       try {
         var authData = await getLocal([AUTH_SESSION_KEY]);
@@ -8368,7 +8387,7 @@
               action: 'HADER_BROWSER_PREPARATION_PROGRESS',
               payload: { operation_id: message.operationId, done: index, total: message.lessons.length, current: lesson.selection_text }
             });
-            await prefetchAILessonDataForCard({ select: select, div: card, selection: selection });
+            var aiData = await prefetchAILessonDataForCard({ select: select, div: card, selection: selection });
             var ok = await silentPrepareLesson(token, selection, lesson.subject_id, lesson.school_madrasati_id, card);
             if (!ok) throw new Error('رفضت مدرستي حفظ التحضير.');
             var scheduleCard = card && (card.querySelector('.schedule-card') || card);
@@ -8377,7 +8396,8 @@
               scheduleCard.classList.add('done');
               scheduleCard.setAttribute('data-status', 'done');
             }
-            results.push({ preparation_id: lesson.preparation_id, status: 'done', error: null });
+            // The lesson text goes back with the result, so Hader can print the preparation later.
+            results.push({ preparation_id: lesson.preparation_id, status: 'done', error: null, content: preparedContentForBackend(aiData) });
           } catch (error) {
             results.push({ preparation_id: lesson.preparation_id, status: 'error', error: error?.message || String(error) });
           }
