@@ -8011,17 +8011,19 @@
     // quiet on failure: a teacher without a plan simply has nothing saved.
     var haderSavedWeeks = {};
 
-    async function saveShownWeekToHader() {
-      if (haderAllWeeksRunning || haderRemotePreparationRunning) return;
+    // `force` (a preparation that couldn't find its lesson) saves the week even
+    // mid-preparation and again on the same page load. Returns true once saved.
+    async function saveShownWeekToHader(force) {
+      if (!force && (haderAllWeeksRunning || haderRemotePreparationRunning)) return false;
       var period = readMadrasatiPeriod();
-      if (!period || !period.week_date || haderSavedWeeks[period.week_date]) return;
+      if (!period || !period.week_date || (!force && haderSavedWeeks[period.week_date])) return false;
       haderSavedWeeks[period.week_date] = true;
       var week = await harvestScheduleForHader({ light: true });
-      if (!week.success || !week.timetable || !week.timetable.length) return;
+      if (!week.success || !week.timetable || !week.timetable.length) return false;
       if (week.week_source !== 'period' || week.week_date !== period.week_date) {
         // The grid moved while it was being read; try again on the next scan.
         delete haderSavedWeeks[period.week_date];
-        return;
+        return false;
       }
       var response = await sendRuntimeMessage({
         action: 'HADER_IMPORT_SHOWN_WEEK',
@@ -8035,7 +8037,9 @@
       });
       if (!response || !response.ok) {
         console.info('[حضر] The week on screen was not saved to Hader:', response && (response.status || response.error));
+        return false;
       }
+      return true;
     }
 
     function slimHaderWeek(snapshot) {
@@ -8061,6 +8065,29 @@
     // A preparation that has held the tab this long is assumed dead (a hung
     // Madrasati request, say) and no longer blocks new ones.
     var HADER_PREPARATION_STALE_MS = 15 * 60 * 1000;
+
+    // Requests from Hader that arrived while a preparation was running, oldest first.
+    var haderPreparationQueue = [];
+    var HADER_PREPARATION_QUEUE_MAX = 5;
+
+    function startHaderBrowserPreparation(message) {
+      haderRemotePreparationRunning = true;
+      haderRemotePreparationStartedAt = Date.now();
+      void (async function () {
+        try {
+          // Preparation outranks a background week walk: stop the walk,
+          // let it put the grid back, then prepare.
+          if (haderAllWeeksRunning) {
+            haderAllWeeksAbort = true;
+            await waitForHaderAllWeeksToStop(120000);
+          }
+          await executeHaderBrowserPreparation(message);
+        } finally {
+          var next = haderPreparationQueue.shift();
+          if (next) startHaderBrowserPreparation(next);
+        }
+      })();
+    }
 
     function isHaderPreparationBusy() {
       return haderRemotePreparationRunning
@@ -8366,10 +8393,28 @@
             var token = await resolveHaderLessonToken(lesson);
             var select = await waitForHaderLessonSelect(token, 30000);
             if (!select) {
+              // Second chance: the grid may have reloaded or moved to another week meanwhile.
+              if (lesson.week_date) {
+                var again = readMadrasatiPeriod();
+                if (again && again.week_date && again.week_date !== lesson.week_date) {
+                  try {
+                    weekSteps += await goToMadrasatiWeek(lesson.week_date);
+                  } catch (navigationError) {
+                    weekSteps += navigationError.haderSteps || 0;
+                  }
+                }
+              }
+              await sleep(1500);
+              token = await resolveHaderLessonToken(lesson);
+              select = await waitForHaderLessonSelect(token, 15000);
+            }
+            if (!select) {
               var onScreen = readMadrasatiPeriod();
+              // Hader's copy of this week is out of date: refresh it, so asking again works.
+              var refreshed = await saveShownWeekToHader(true).catch(function () { return false; });
               throw new Error('لم أجد الحصة في جدول مدرستي'
                 + (onScreen && onScreen.label ? ' (المعروض: ' + onScreen.label.replace(/^.*?(1[34]\d\d)/, '$1') + ')' : '')
-                + '. حدّث الجدول في حضّر ثم أعد المحاولة.');
+                + (refreshed ? '. حدّثنا جدولك في حضّر، أعد طلب التحضير.' : '. حدّث الجدول في حضّر ثم أعد المحاولة.'));
             }
             var option = Array.from(select.options).find(function (candidate) { return candidate.value === lesson.selection_value; });
             if (!option) throw new Error('الدرس المختار غير متاح لهذه الحصة في مدرستي. حدّث الجدول.');
@@ -8459,26 +8504,23 @@
         }
 
         if (message && message.action === 'HADER_EXECUTE_BROWSER_PREPARATION') {
-          if (isHaderPreparationBusy()) {
-            sendResponse({ success: false, error: 'يوجد تحضير جارٍ بالفعل في تبويب مدرستي. انتظر حتى ينتهي.' });
-            return true;
-          }
           if (!Array.isArray(message.lessons) || !message.lessons.length) {
             sendResponse({ success: false, error: 'لم يرسل الخادم أي حصص معتمدة.' });
             return true;
           }
-          haderRemotePreparationRunning = true;
-          haderRemotePreparationStartedAt = Date.now();
-          sendResponse({ success: true, accepted: true });
-          void (async function () {
-            // Preparation outranks a background week walk: stop the walk,
-            // let it put the grid back, then prepare.
-            if (haderAllWeeksRunning) {
-              haderAllWeeksAbort = true;
-              await waitForHaderAllWeeksToStop(120000);
+          // A request that arrives while another one runs waits its turn instead of failing.
+          if (isHaderPreparationBusy()) {
+            if (haderPreparationQueue.length >= HADER_PREPARATION_QUEUE_MAX) {
+              sendResponse({ success: false, error: 'يوجد تحضير جارٍ بالفعل في تبويب مدرستي. انتظر حتى ينتهي.' });
+              return true;
             }
-            await executeHaderBrowserPreparation(message);
-          })();
+            haderPreparationQueue.push(message);
+            showHaderWorkBanner('طلب تحضير جديد في الانتظار، يبدأ بعد انتهاء التحضير الحالي…');
+            sendResponse({ success: true, accepted: true, queued: true });
+            return true;
+          }
+          sendResponse({ success: true, accepted: true });
+          startHaderBrowserPreparation(message);
           return true;
         }
 

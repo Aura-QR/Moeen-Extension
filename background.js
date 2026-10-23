@@ -153,6 +153,30 @@ async function findMadrasatiTab(openIfMissing) {
   return { tab: opened, opened: true };
 }
 
+const MADRASATI_SCHEDULE_URL = 'https://schools.madrasati.sa/SchoolSchedule';
+
+/**
+ * Opens the teacher schedule in a new tab and waits for it. Returns the tab
+ * only when Madrasati really shows the schedule; a sign-in page (or anything
+ * else) comes back as an error to show the teacher.
+ */
+async function openMadrasatiSchedule() {
+  let tab;
+  try {
+    tab = await chrome.tabs.create({ url: MADRASATI_SCHEDULE_URL, active: true });
+  } catch (error) {
+    return { tab: null, opened: false, error: 'تعذر فتح مدرستي. افتح جدول المعلم في مدرستي ثم أعد طلب التحضير.' };
+  }
+  await waitForTabComplete(tab.id, 45000);
+  const found = await findMadrasatiTab(false);
+  if (found.tab && found.tab.id === tab.id) return { tab: found.tab, opened: true };
+  return {
+    tab: null,
+    opened: true,
+    error: 'فتحنا لك مدرستي في تبويب جديد. سجّل الدخول وافتح جدول المعلم، ثم أعد طلب التحضير.'
+  };
+}
+
 async function waitForTabComplete(tabId, timeoutMs) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
@@ -760,7 +784,9 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         // will write, so the server can hold each Hader account to one
         // teacher. A missing tab is reported after the claim, which lets the
         // failure path below release the reserved quota.
-        const found = await findMadrasatiTab(false);
+        let found = await findMadrasatiTab(false);
+        // No schedule tab: open the teacher schedule ourselves instead of asking the teacher to.
+        if (!found.tab) found = await openMadrasatiSchedule();
         const madrasatiUser = found.tab
           ? await sendToTab(found.tab.id, { action: 'HADER_GET_MADRASATI_USER' }).catch(() => null)
           : null;
@@ -786,7 +812,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         claimedLessons = Array.isArray(claim.data.lessons) ? claim.data.lessons : [];
 
         if (!found.tab) {
-          throw new Error('افتح جدول المعلم في مدرستي أولًا، ثم أعد طلب التحضير.');
+          throw new Error(found.error || 'افتح جدول المعلم في مدرستي أولًا، ثم أعد طلب التحضير.');
         }
         const accepted = await sendToTab(found.tab.id, {
           action: 'HADER_EXECUTE_BROWSER_PREPARATION',

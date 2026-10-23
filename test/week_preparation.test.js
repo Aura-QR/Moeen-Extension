@@ -33,7 +33,7 @@ function addDays(date, days) {
 /** A Madrasati grid that shows one week at a time. `slots` gives a card's
  * position as { token: [day, period] }; classroom and subject are fixed. */
 function fakeMadrasati({ start, weeks, firstWeek, lastWeek, slots = {} }) {
-  const state = { week: start, visited: [start], prepared: [] };
+  const state = { week: start, visited: [start], prepared: [], refreshedWeeks: [] };
 
   function selectFor(token) {
     return {
@@ -81,6 +81,7 @@ function fakeMadrasati({ start, weeks, firstWeek, lastWeek, slots = {} }) {
     prefetchAILessonDataForCard: async () => ({ LectureClassPreparationText: 'تمهيد' }),
     preparedContentForBackend: (d) => (d ? { preparation_text: d.LectureClassPreparationText } : null),
     silentPrepareLesson: async (token) => { state.prepared.push(token); return true; },
+    saveShownWeekToHader: async () => { state.refreshedWeeks.push(state.week); return true; },
   };
   return { state, stubs };
 }
@@ -183,6 +184,8 @@ function lesson(id, token, weekDate) {
     check('the card is found by its slot', result.results.map((r) => r.status), ['done', 'error']);
     check('and prepared under its current token', state.prepared, ['B-new']);
     check('without a slot there is nothing to match on', /لم أجد الحصة/.test(result.results[1].error), true);
+    check('Hader\'s copy of that week is refreshed', state.refreshedWeeks, ['2026-10-11']);
+    check('and the teacher is told to ask again', /حدّثنا جدولك/.test(result.results[1].error), true);
   }
 
   console.log(failures ? `\n${failures} failed` : '\nAll passed');
