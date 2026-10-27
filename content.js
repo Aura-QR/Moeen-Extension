@@ -142,6 +142,58 @@
         TeacherNote: teacherNote || EXPLICIT_LESSON_FIELD_VALUES.TeacherNote
       };
     }
+    // The lesson's AI text, as n8n's raw JSON, or null. Through Hader first
+    // (POST /extension/lesson-ai, so the n8n key can later leave this file).
+    // While DIRECT_AI_FALLBACK is on, a call that doesn't succeed through Hader
+    // (not signed in, offline, an older backend, any error) goes to n8n
+    // directly as before, so preparation never stops because of the switch.
+    var DIRECT_AI_FALLBACK = true;
+    async function requestLessonAI(body) {
+      try {
+        var authData = await getLocal([AUTH_SESSION_KEY]);
+        var session = authData && authData[AUTH_SESSION_KEY];
+        if (session && session.token) {
+          var viaHader = await sendRuntimeMessage({
+            action: "LESSON_AI",
+            token: session.token,
+            tokenType: session.tokenType || "Bearer",
+            payload: body
+          });
+          if (viaHader && viaHader.ok && viaHader.data && typeof viaHader.data === "object") {
+            log("requestLessonAI: answered through Hader");
+            return viaHader.data;
+          }
+          log("requestLessonAI: Hader didn't answer", viaHader && viaHader.status);
+        }
+      } catch (err) {
+        log("requestLessonAI: Hader error:", err);
+      }
+      if (!DIRECT_AI_FALLBACK) return null;
+
+      var controller = new AbortController();
+      var timeoutId = setTimeout(function () { controller.abort(); }, AI_WEBHOOK_TIMEOUT_MS);
+      try {
+        var response = await fetch(N8N_AI_WEBHOOK_URL, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-api-key": N8N_AI_API_KEY
+          },
+          body: JSON.stringify(body),
+          signal: controller.signal
+        });
+        if (!response.ok) {
+          log("requestLessonAI: n8n HTTP", response.status);
+          return null;
+        }
+        return await response.json();
+      } catch (err) {
+        log("requestLessonAI: n8n error:", err);
+        return null;
+      } finally {
+        clearTimeout(timeoutId);
+      }
+    }
     var LESSON_RESOURCE_ERROR_PATTERNS = [
       "\u0644\u0645 \u064A\u0643\u062A\u0645\u0644 \u0625\u0639\u062F\u0627\u062F \u0627\u0644\u062F\u0631\u0633",
       "\u064A\u062A\u0639\u064A\u0646 \u0639\u0644\u064A\u0643 \u0625\u0636\u0627\u0641\u0629 \u0627\u062B\u0631\u0627\u0621 \u0623\u0648 \u0648\u0627\u062C\u0628 \u0623\u0648 \u0627\u062E\u062A\u0628\u0627\u0631 \u0623\u0648 \u0646\u0634\u0627\u0637 \u0648\u0627\u062D\u062F \u0639\u0644\u0649 \u0627\u0644\u0623\u0642\u0644",
@@ -4360,33 +4412,17 @@
           return null;
         }
 
-        // 3. Call n8n
-        var controller = new AbortController();
-        var timeoutId = setTimeout(function () { controller.abort(); }, AI_WEBHOOK_TIMEOUT_MS);
-        var res;
-        try {
-          res = await fetch(N8N_AI_WEBHOOK_URL, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'x-api-key': N8N_AI_API_KEY
-            },
-            body: JSON.stringify({
-              grade: gradeName,
-              subject: subjectName,
-              lesson_title: lessonName
-            }),
-            signal: controller.signal
-          });
-        } finally {
-          clearTimeout(timeoutId);
-        }
-
-        if (!res.ok) {
-          console.warn('[Moeen-2-AI] prefetch HTTP', res.status, 'for', lessonId);
+        // 3. Ask the AI (through Hader, see requestLessonAI)
+        var raw = await requestLessonAI({
+          grade: gradeName,
+          subject: subjectName,
+          lesson_title: lessonName
+        });
+        if (!raw) {
+          console.warn('[Moeen-2-AI] prefetch: no AI answer for', lessonId);
           return null;
         }
-        var data = normalizeAIWebhookResponse(await res.json());
+        var data = normalizeAIWebhookResponse(raw);
         if (!data) {
           console.warn('[Moeen-2-AI] prefetch: invalid response shape for', lessonId);
           return null;
@@ -5410,32 +5446,17 @@
     }
     async function fetchAILessonData(context) {
       try {
-        log("fetchAILessonData: sending to n8n:", context);
-        var controller = new AbortController();
-        var timeoutId = setTimeout(function () { controller.abort(); }, AI_WEBHOOK_TIMEOUT_MS);
-        var response;
-        try {
-          response = await fetch(N8N_AI_WEBHOOK_URL, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "x-api-key": N8N_AI_API_KEY
-            },
-            body: JSON.stringify({
-              grade: context.grade,
-              subject: context.subject,
-              lesson_title: context.lessonTitle
-            }),
-            signal: controller.signal
-          });
-        } finally {
-          clearTimeout(timeoutId);
-        }
-        if (!response.ok) {
-          log("fetchAILessonData: HTTP error", response.status);
+        log("fetchAILessonData: sending:", context);
+        var raw = await requestLessonAI({
+          grade: context.grade,
+          subject: context.subject,
+          lesson_title: context.lessonTitle
+        });
+        if (!raw) {
+          log("fetchAILessonData: no AI answer");
           return null;
         }
-        var data = normalizeAIWebhookResponse(await response.json());
+        var data = normalizeAIWebhookResponse(raw);
         log("fetchAILessonData: received:", data);
         return data;
 

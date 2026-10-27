@@ -8,6 +8,9 @@ importScripts('shared/constants.js');
 
 const HADAR_API_BASE = (globalThis.Moeen2_CONFIG?.API_BASE_URL || 'https://api.haderedu.com/api').replace(/\/+$/, '');
 
+// A little longer than the server waits for n8n (EXTENSION_AI_TIMEOUT, 25 s).
+const LESSON_AI_TIMEOUT_MS = 30000;
+
 async function callHadarApi(path, options, token, tokenType) {
   const response = await fetch(HADAR_API_BASE + path, {
     ...(options || {}),
@@ -987,6 +990,22 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         sendResponse({ ok: true, status: response.status, data });
       })
       .catch((error) => sendResponse({ ok: false, error: error?.message || String(error) }));
+    return true;
+  }
+
+  // The lesson's AI text through Hader (content.js requestLessonAI). Gives up
+  // after LESSON_AI_TIMEOUT_MS so the caller can fall back in time.
+  if (msg?.action === 'LESSON_AI') {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), LESSON_AI_TIMEOUT_MS);
+    callHadarApi('/extension/lesson-ai', {
+      method: 'POST',
+      body: JSON.stringify(msg.payload || {}),
+      signal: controller.signal
+    }, msg.token, msg.tokenType)
+      .then(sendResponse)
+      .catch((error) => sendResponse({ ok: false, status: 0, error: error?.message || String(error) }))
+      .finally(() => clearTimeout(timer));
     return true;
   }
 
