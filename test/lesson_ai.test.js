@@ -84,6 +84,18 @@ const okN8n = () => ({ ok: true, status: 200, json: async () => n8nAnswer });
     check('with the fallback off: null and n8n is never called', (await requestLessonAI(lesson)) === null && calls.n8n.length === 0);
   }
 
+  {
+    // cardClassroomName: the class label sent along so Hader can fill the grade.
+    const from = SOURCE.indexOf('    function cardClassroomName(div) {');
+    const to = SOURCE.indexOf('    async function runAILessonPrefetch(');
+    const cardClassroomName = new Function(SOURCE.slice(from, to) + '; return cardClassroomName;')();
+    const card = (found) => ({ querySelector: (selector) => found[selector] || null });
+    check('class from <small>', cardClassroomName(card({ 'small,.class-name,[data-class-name]': { textContent: '  سادس \n' } })) === 'سادس');
+    check('class from div.p-1 when there is no <small>', cardClassroomName(card({ 'div.p-1': { innerText: 'أول بنات' } })) === 'أول بنات');
+    check('no class: empty, no exception', cardClassroomName(card({})) === '' && cardClassroomName(null) === '');
+    check('the prefetch sends the class', /lesson_title: lessonName,\s*classroom: classroomName/.test(SOURCE));
+  }
+
   if (failures) {
     console.error(`\n${failures} check(s) failed`);
     process.exit(1);

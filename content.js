@@ -4357,6 +4357,18 @@
 
     // ── Prefetch AI content for a single lesson card and cache in chrome.storage.local ──
     // Returns the AI object (5 fields) or null on failure. Cache key: Moeen-2_ai_<lessonId>.
+    // A schedule card's class name, as Madrasati shows it under the subject
+    // (the same selector the schedule import uses, then <div class="p-1">
+    // on cards not prepared yet). '' when not found.
+    function cardClassroomName(div) {
+      try {
+        var el = div && (div.querySelector('small,.class-name,[data-class-name]') || div.querySelector('div.p-1'));
+        return el ? (el.innerText || el.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 100) : '';
+      } catch (_) {
+        return '';
+      }
+    }
+
     async function runAILessonPrefetch(cardItem, lessonId) {
       try {
         console.log('[Moeen-2-AI] prefetch: resolved lessonId', lessonId, 'from treeValue');
@@ -4392,6 +4404,11 @@
           }
         } catch (_) { }
 
+        // The card's class («سادس», «أول بنات»): Hader turns it into the grade
+        // name from its curriculum (/extension/lesson-ai), so the AI writes for
+        // the right stage. n8n ignores it if this call falls back to it directly.
+        var classroomName = cardClassroomName(div);
+
         var gradeName = '';
         // The grade is not in the dashboard card DOM and not in our local JSON.
         // We will resolve it later inside silentPrepareLesson by parsing the
@@ -4416,7 +4433,8 @@
         var raw = await requestLessonAI({
           grade: gradeName,
           subject: subjectName,
-          lesson_title: lessonName
+          lesson_title: lessonName,
+          classroom: classroomName
         });
         if (!raw) {
           console.warn('[Moeen-2-AI] prefetch: no AI answer for', lessonId);
