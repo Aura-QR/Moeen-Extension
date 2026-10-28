@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>إعدادات حضر</title>
+  <style>
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; margin: 16px; }
+    h1 { font-size: 20px; margin: 0 0 12px; }
+    fieldset { border: 1px solid #ccc; border-radius: 8px; padding: 12px; margin-bottom: 12px; }
+    label { display: block; margin: 6px 0; }
+    input[type="text"], input[type="number"], textarea { width: 100%; box-sizing: border-box; padding: 8px; }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .actions { display: flex; gap: 8px; }
+    small { color: #666; }
+    textarea { min-height: 120px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+  </style>
+</head>
+<body>
+  <h1>إعدادات حضر</h1>
+
+  <fieldset>
+    <legend>إعدادات عامة</legend>
+    <div class="row">
+      <label>
+        الفاصل الزمني (مللي ثانية)
+        <input type="number" id="interval" min="100" step="100" placeholder="1000" />
+      </label>
+      <label>
+        الحد الأقصى للمحاولات
+        <input type="number" id="maxRetries" min="1" step="1" placeholder="20" />
+      </label>
+    </div>
+    <label>
+      مُحدد CSS افتراضي (عند عدم وجود ملف شخصي للموقع)
+      <input type="text" id="defaultSelector" placeholder="مثال: button.submit" />
+    </label>
+  </fieldset>
+
+  <fieldset>
+    <legend>ملفات مواقع محددة</legend>
+    <p>
+      صيغة JSON بقيمة <code>{ "hostname": { "selector": "...", "interval": 1200, "maxRetries": 15 } }</code>
+    </p>
+    <textarea id="profiles"></textarea>
+    <small>سيتم دمج القيم غير المحددة مع الإعدادات العامة.</small>
+  </fieldset>
+
+  <div class="actions">
+    <button id="save">حفظ</button>
+    <button id="reset">إعادة تعيين</button>
+    <span id="status"></span>
+  </div>
+
+  <hr style="border: none; border-top: 1px dashed #ddeee8; margin: 24px 0 16px;">
+  
+  <div style="font-size: 13px; color: #102a43; display: flex; flex-direction: column; gap: 8px; direction: rtl;">
+    <strong style="color: #075244;">📞 الدعم الفني وتواصل الخدمة:</strong>
+    <div style="display: flex; gap: 24px; align-items: center; flex-wrap: wrap;">
+      <span>دعم فني (1): <a href="https://wa.me/966565101406" target="_blank" rel="noopener noreferrer" style="color: #0e7a5e; text-decoration: none; font-weight: bold; font-family: monospace;">0565101406</a> <span style="color: #888;">(جوال / واتساب)</span></span>
+      <span>دعم فني (2): <a href="https://wa.me/966567448881" target="_blank" rel="noopener noreferrer" style="color: #0e7a5e; text-decoration: none; font-weight: bold; font-family: monospace;">0567448881</a> <span style="color: #888;">(جوال / واتساب)</span></span>
+      <span>🔒 <a href="https://haderedu.com/privacy-policy-extension" target="_blank" rel="noopener noreferrer" style="color: #0e7a5e; text-decoration: underline; font-weight: bold;">سياسة خصوصية إضافة حضر (Chrome Extension)</a></span>
+    </div>
+  </div>
+
+  <script src="shared/constants.js"></script>
+  <script src="options.js"></script>
+</body>
+</html>

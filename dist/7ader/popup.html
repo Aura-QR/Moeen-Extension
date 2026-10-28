@@ -1,0 +1,830 @@
+<!-- popup.html - Moeen-2 Extension popup with auth gate and settings dashboard -->
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>حضر - لوحة التحكم</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+        }
+
+        :root {
+            --background: #f7fcfa;
+            --foreground: #102a43;
+            --moeen-bg: #f7fcfa;
+            --moeen-card: #ffffff;
+            --moeen-card-soft: rgba(255, 255, 255, 0.92);
+            --moeen-text: #102a43;
+            --moeen-heading: #075244;
+            --moeen-muted: #718096;
+            --moeen-primary: #0e7a5e;
+            --moeen-primary-2: #24b998;
+            --moeen-primary-soft: #f2fbf7;
+            --moeen-gold: #e2ad3b;
+            --moeen-border: #ddeee8;
+            --moeen-shadow: rgba(13, 84, 70, 0.08);
+        }
+
+        body {
+            width: 400px;
+            min-height: 500px;
+            background:
+                radial-gradient(circle at top right, rgba(36, 185, 152, 0.16), transparent 32%),
+                radial-gradient(circle at bottom left, rgba(226, 173, 59, 0.12), transparent 30%),
+                var(--moeen-bg);
+            color: var(--moeen-text);
+            padding: 16px;
+        }
+
+        /* ── Shared Header ── */
+        .ext-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 14px;
+            padding: 12px;
+            border: 1px solid rgba(221, 238, 232, 0.88);
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.78);
+            box-shadow: 0 10px 28px var(--moeen-shadow);
+        }
+
+        .ext-header-logo {
+            width: 46px;
+            height: 46px;
+            border-radius: 8px;
+            background: #fff;
+            border: 1px solid var(--moeen-border);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 5px;
+            box-shadow: 0 6px 18px rgba(13, 84, 70, 0.12);
+            flex-shrink: 0;
+        }
+
+        .ext-header-logo img,
+        .user-info-icon img {
+            width: 100%;
+            height: 100%;
+            display: block;
+            object-fit: contain;
+            border-radius: 6px;
+        }
+
+        .ext-header-text h1 {
+            color: var(--moeen-heading);
+            font-size: 21px;
+            font-weight: 800;
+            letter-spacing: 0;
+        }
+
+        .ext-header-text p {
+            color: var(--moeen-muted);
+            font-size: 12px;
+            margin-top: 2px;
+        }
+
+        .login-hero {
+            background: linear-gradient(180deg, #ffffff 0%, var(--moeen-primary-soft) 100%);
+            border: 1px solid var(--moeen-border);
+            border-radius: 8px;
+            padding: 18px;
+            margin-bottom: 12px;
+            box-shadow: 0 14px 32px var(--moeen-shadow);
+        }
+
+        .login-hero-title {
+            font-size: 18px;
+            font-weight: 800;
+            color: var(--moeen-heading);
+            margin-bottom: 6px;
+        }
+
+        .login-hero-copy {
+            color: var(--moeen-muted);
+            font-size: 13px;
+            line-height: 1.7;
+        }
+
+        .backend-status {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 26px;
+            margin-top: 12px;
+            padding: 4px 10px;
+            border-radius: 8px;
+            font-size: 12px;
+            font-weight: 700;
+            border: 1px solid transparent;
+        }
+
+        .backend-status.checking { color: #5f4b12; background: #fff8db; border-color: #f3dc8a; }
+        .backend-status.online { color: var(--moeen-heading); background: #e9f9f2; border-color: #b9e9d6; }
+        .backend-status.warning { color: #8a4a05; background: #fff3e0; border-color: #f3c981; }
+        .backend-status.offline { color: #9f1c12; background: #fff0ee; border-color: #f3bbb5; }
+
+        /* ── Screen transitions ── */
+        #screen-login,
+        #screen-dashboard {
+            animation: fadeInUp 0.22s ease both;
+        }
+
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(8px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+
+        /* ── Card ── */
+        .card {
+            background: var(--moeen-card-soft);
+            border-radius: 8px;
+            border: 1px solid var(--moeen-border);
+            box-shadow: 0 14px 34px var(--moeen-shadow);
+            padding: 20px;
+            margin-bottom: 12px;
+        }
+
+        .card-title {
+            font-size: 16px;
+            font-weight: 800;
+            color: var(--moeen-heading);
+            margin-bottom: 16px;
+        }
+
+        /* ── Section card ── */
+        .section {
+            border: 1px solid #dce6f2;
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 12px;
+            background: #fcfdff;
+        }
+
+        .section-title {
+            font-size: 12px;
+            font-weight: 700;
+            color: #0056b3;
+            text-transform: uppercase;
+            letter-spacing: .04em;
+            margin-bottom: 10px;
+        }
+
+        /* ── Form elements ── */
+        .form-group { margin-bottom: 14px; }
+        .form-group:last-child { margin-bottom: 0; }
+
+        label {
+            display: block;
+            font-size: 13px;
+            font-weight: 700;
+            color: var(--moeen-text);
+            margin-bottom: 6px;
+        }
+
+        input[type="text"],
+        input[type="email"],
+        input[type="password"],
+        input[type="url"],
+        textarea {
+            width: 100%;
+            padding: 11px 14px;
+            border: 1.5px solid var(--moeen-border);
+            border-radius: 8px;
+            font-size: 14px;
+            color: var(--moeen-text);
+            background: #fff;
+            transition: border-color .2s, box-shadow .2s, background .2s;
+        }
+
+        textarea {
+            font-family: "Courier New", Courier, monospace;
+            font-size: 12px;
+            resize: vertical;
+            min-height: 110px;
+        }
+
+        input::placeholder,
+        textarea::placeholder { color: #9aa6b8; }
+
+        input:focus,
+        textarea:focus {
+            outline: none;
+            border-color: var(--moeen-primary-2);
+            box-shadow: 0 0 0 3px rgba(36, 185, 152, .15);
+        }
+
+        textarea.json-error {
+            border-color: #e53e3e;
+            box-shadow: 0 0 0 3px rgba(229, 62, 62, .1);
+        }
+
+        /* ── Password field wrapper ── */
+        .password-wrapper {
+            position: relative;
+        }
+
+        .password-wrapper input {
+            padding-left: 44px;
+        }
+
+        .password-toggle {
+            position: absolute;
+            left: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: none;
+            border: none;
+            color: var(--moeen-muted);
+            cursor: pointer;
+            padding: 4px;
+            border-radius: 8px;
+            height: auto;
+            width: auto;
+            font-size: 16px;
+            line-height: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: color .15s;
+        }
+
+        .password-toggle:hover { color: var(--moeen-primary); }
+        .password-toggle:active { transform: translateY(-50%) scale(0.9); }
+
+        .hint {
+            font-size: 11px;
+            color: #8a96a8;
+            margin-top: 4px;
+            line-height: 1.45;
+        }
+
+        .json-err-msg {
+            display: none;
+            font-size: 11px;
+            color: #c0392b;
+            background: #fdecea;
+            border-radius: 8px;
+            padding: 5px 9px;
+            margin-top: 4px;
+        }
+
+        /* ── Login error ── */
+        .login-error {
+            display: none;
+            font-size: 13px;
+            color: #b42318;
+            background: #fef3f2;
+            border: 1px solid #f5c6c2;
+            border-radius: 8px;
+            padding: 9px 12px;
+            margin-bottom: 14px;
+            text-align: center;
+        }
+
+        /* ── Buttons ── */
+        .buttons {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        button {
+            border: none;
+            border-radius: 8px;
+            height: 44px;
+            font-size: 14px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: opacity .15s, transform .1s;
+        }
+
+        button:active { transform: translateY(1px); }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--moeen-primary), var(--moeen-primary-2));
+            color: #fff;
+            box-shadow: 0 10px 22px rgba(14, 122, 94, .24);
+        }
+
+        .btn-primary:hover { filter: brightness(.96); }
+
+        .btn-logout {
+            background: #ffffff;
+            border: 1.5px solid #f2c7c2;
+            color: #b42318;
+            height: 42px;
+            font-size: 13px;
+        }
+
+        .btn-logout:hover {
+            background: #fef2f2;
+        }
+
+        /* ── Start week button ── */
+        .btn-start-week {
+            background: #0056b3;
+            color: #fff;
+            box-shadow: 0 6px 14px rgba(0, 86, 179, .22);
+            width: 100%;
+            height: 50px;
+            font-size: 16px;
+            margin-bottom: 12px;
+        }
+
+        .btn-start-week:hover { opacity: .9; }
+
+        /* ── Checkbox ── */
+        .checkbox-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 8px;
+            font-size: 13px;
+            color: #3a4658;
+        }
+
+        .checkbox-group input[type="checkbox"] {
+            accent-color: var(--moeen-primary);
+            width: 15px;
+            height: 15px;
+            flex-shrink: 0;
+        }
+
+        .checkbox-group label { margin: 0; font-weight: normal; }
+
+        /* ── User info card ── */
+        .user-info-card {
+            background: linear-gradient(180deg, #ffffff 0%, var(--moeen-primary-soft) 100%);
+            border: 1px solid var(--moeen-border);
+            border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            box-shadow: 0 14px 32px var(--moeen-shadow);
+        }
+
+        .user-info-icon {
+            width: 44px;
+            height: 44px;
+            border-radius: 8px;
+            background: #fff;
+            border: 1px solid var(--moeen-border);
+            padding: 5px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+
+        .user-info-text {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .user-info-name {
+            font-size: 14px;
+            font-weight: 800;
+            color: var(--moeen-heading);
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .user-info-email {
+            font-size: 12px;
+            color: var(--moeen-muted);
+            margin-top: 2px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            direction: ltr;
+            text-align: right;
+        }
+
+        .user-badge {
+            font-size: 11px;
+            font-weight: 700;
+            color: var(--moeen-heading);
+            background: #e9f9f2;
+            border: 1px solid #b9e9d6;
+            border-radius: 8px;
+            padding: 2px 9px;
+            white-space: nowrap;
+        }
+
+        .account-note {
+            background: #fff;
+            border: 1px solid var(--moeen-border);
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 12px;
+            color: var(--moeen-muted);
+            font-size: 12px;
+            line-height: 1.7;
+        }
+
+        /* ── Trial Status Card ── */
+        .trial-card {
+            border-radius: 10px;
+            padding: 12px 14px;
+            margin-bottom: 12px;
+            font-size: 12px;
+            line-height: 1.7;
+        }
+        .trial-card.active {
+            background: linear-gradient(135deg, #eaf9f2 0%, #f5fdf9 100%);
+            border: 1px solid #a7e6c6;
+        }
+        .trial-card.last-day {
+            background: linear-gradient(135deg, #fef9ec 0%, #fffdf5 100%);
+            border: 1px solid #f0d38a;
+        }
+        .trial-card.expired {
+            background: linear-gradient(135deg, #fef2f2 0%, #fff8f8 100%);
+            border: 1px solid #fca5a5;
+        }
+        .trial-card.subscribed {
+            background: linear-gradient(135deg, #eaf9f2 0%, #f5fdf9 100%);
+            border: 1px solid #a7e6c6;
+        }
+        .trial-title {
+            font-weight: 800;
+            font-size: 13px;
+            margin-bottom: 3px;
+        }
+        .trial-card.active .trial-title { color: #065f46; }
+        .trial-card.last-day .trial-title { color: #92400e; }
+        .trial-card.expired .trial-title { color: #991b1b; }
+        .trial-card.subscribed .trial-title { color: #065f46; }
+        .trial-sub { color: #6b7280; font-size: 11px; }
+        .trial-upgrade-btn {
+            display: inline-block;
+            margin-top: 8px;
+            background: #0e7a5e;
+            color: #fff;
+            border: none;
+            border-radius: 7px;
+            padding: 6px 14px;
+            font-size: 12px;
+            font-weight: 700;
+            cursor: pointer;
+            text-decoration: none;
+            transition: background 0.18s;
+        }
+        .trial-upgrade-btn:hover { background: #065f46; }
+        .trial-upgrade-btn.urgent { background: #b91c1c; }
+        .trial-upgrade-btn.urgent:hover { background: #991b1b; }
+
+        .account-note strong {
+            color: var(--moeen-heading);
+        }
+
+        /* ── Divider ── */
+        .divider {
+            border: none;
+            border-top: 1px dashed var(--moeen-border);
+            margin: 12px 0;
+        }
+
+        /* ── Status ── */
+        .status {
+            display: none;
+            padding: 9px 12px;
+            border-radius: 8px;
+            font-size: 13px;
+            line-height: 1.4;
+            margin-bottom: 10px;
+        }
+
+        .status.success { display:block; background:#edf9f2; color:#16784b; border:1px solid #c3e8d4; }
+        .status.error   { display:block; background:#fef3f2; color:#b42318; border:1px solid #f5c6c2; }
+        .status.info    { display:block; background:#eef8fb; color:#0c5460; border:1px solid #c0dfe8; }
+
+        /* ── Footer ── */
+        .footer {
+            border-top: 1px dashed var(--moeen-border);
+            padding-top: 9px;
+            text-align: center;
+            color: var(--moeen-muted);
+            font-size: 11px;
+            line-height: 1.6;
+        }
+
+        .footer a,
+        .footer span.link-text {
+            color: var(--moeen-primary);
+            text-decoration: none;
+            cursor: pointer;
+        }
+
+        .footer a:hover {
+            text-decoration: underline;
+        }
+
+        /* ── Support Contacts Panel ── */
+        .support-panel {
+            background: rgba(255, 255, 255, 0.9);
+            border: 1px solid var(--moeen-border);
+            border-radius: 8px;
+            padding: 10px 12px;
+            margin-bottom: 12px;
+            box-shadow: 0 4px 12px var(--moeen-shadow);
+        }
+        .support-title {
+            font-size: 12px;
+            font-weight: 800;
+            color: var(--moeen-heading);
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .support-contacts {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+        .support-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: var(--moeen-primary-soft);
+            border: 1px solid rgba(14, 122, 94, 0.08);
+            border-radius: 6px;
+            padding: 6px 10px;
+        }
+        .support-label {
+            font-size: 11px;
+            color: var(--moeen-muted);
+            font-weight: 600;
+        }
+        .support-number {
+            font-weight: 700;
+            color: var(--moeen-text);
+            font-family: system-ui, sans-serif;
+            font-size: 13px;
+            direction: ltr;
+        }
+        .support-links {
+            display: flex;
+            gap: 6px;
+        }
+        .support-link {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: #fff;
+            border: 1px solid var(--moeen-border);
+            color: var(--moeen-primary);
+            text-decoration: none;
+            transition: all 0.2s;
+        }
+        .support-link svg {
+            width: 12px;
+            height: 12px;
+            display: block;
+        }
+        .support-link:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+        }
+        .support-link.call:hover {
+            background: var(--moeen-primary);
+            border-color: var(--moeen-primary);
+            color: #fff;
+        }
+        .support-link.whatsapp:hover {
+            background: #25D366;
+            border-color: #25D366;
+            color: #fff;
+        }
+
+        /* ── Loading spinner ── */
+        .loading { opacity: .7; pointer-events: none; }
+        .loading::after {
+            content: "";
+            display: inline-block;
+            width: 13px; height: 13px;
+            border: 2px solid currentColor;
+            border-top-color: transparent;
+            border-radius: 50%;
+            animation: spin .85s linear infinite;
+            margin-right: 6px;
+            vertical-align: -2px;
+        }
+
+        @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+
+<!-- ════════════════════════════════════
+     SCREEN 1: LOGIN
+════════════════════════════════════ -->
+<div id="screen-login" style="display:none;">
+
+    <!-- Header -->
+    <div class="ext-header">
+        <div class="ext-header-logo">
+            <img src="logo/logo-48.png" width="48" height="48" alt="حضر">
+        </div>
+        <div class="ext-header-text">
+            <h1>حضر</h1>
+            <p>حسابك وأدوات منصة مدرستي</p>
+        </div>
+    </div>
+
+    <div class="login-hero">
+        <div class="login-hero-title">دخول آمن للمعلمين</div>
+        <p class="login-hero-copy">سجّل الدخول بحساب حضر لتفعيل الامتداد داخل منصة مدرستي.</p>
+        <div id="backendStatus" class="backend-status checking">جاري فحص الخادم</div>
+    </div>
+
+    <!-- Prominent Disclosure Card -->
+    <div style="background: rgba(234, 247, 242, 0.7); border: 1px solid var(--moeen-border); border-radius: 8px; padding: 10px 12px; margin-bottom: 12px; font-size: 11px; line-height: 1.5; color: var(--moeen-text);">
+        <strong style="color: var(--moeen-heading); display: block; margin-bottom: 4px;">🛡️ إفصاح خصوصية البيانات:</strong>
+        تعمل الإضافة على قراءة مدخلات نموذج الدرس المحدد في منصة مدرستي لتعبئة التحضير آلياً ومزامنة جدولك بحسابك. لا يتم جمع أو حفظ كلمات المرور.
+        <div style="margin-top: 5px;">
+            <a href="https://haderedu.com/privacy-policy-extension" target="_blank" rel="noopener noreferrer" style="color: var(--moeen-primary); font-weight: 700; text-decoration: none;">سياسة خصوصية الإضافة ←</a>
+        </div>
+    </div>
+
+    <!-- Login Card -->
+    <div class="card">
+        <div class="card-title">تسجيل الدخول</div>
+
+        <!-- Error message -->
+        <div id="loginError" class="login-error"></div>
+
+        <!-- Email -->
+        <div class="form-group">
+            <label for="loginEmail">البريد الإلكتروني</label>
+            <input type="email" id="loginEmail" placeholder="البريد الإلكتروني" dir="ltr" autocomplete="email">
+        </div>
+
+        <!-- Password -->
+        <div class="form-group">
+            <label for="loginPassword">كلمة المرور</label>
+            <div class="password-wrapper">
+                <input type="password" id="loginPassword" placeholder="كلمة المرور" dir="ltr" autocomplete="current-password">
+                <button class="password-toggle" id="passwordToggle" type="button" title="إظهار/إخفاء كلمة المرور" tabindex="-1">👁️</button>
+            </div>
+        </div>
+
+        <!-- Login Button -->
+        <button id="loginBtn" class="btn-primary" type="button" style="width:100%;">
+            تسجيل الدخول
+        </button>
+    </div>
+
+    <!-- Support Contacts -->
+    <div class="support-panel">
+        <div class="support-title">
+            <span>📞</span>
+            <span>الدعم الفني وتواصل الخدمة</span>
+        </div>
+        <div class="support-contacts">
+            <div class="support-item">
+                <span class="support-label">دعم فني (1)</span>
+                <span class="support-number">056 510 1406</span>
+                <div class="support-links">
+                    <a href="tel:0565101406" class="support-link call" title="اتصال هاتفي">
+                        <svg viewBox="0 0 16 16" fill="currentColor"><path fill-rule="evenodd" d="M1.885.511a1.745 1.745 0 0 1 2.61.163L6.29 2.98c.329.423.445.974.315 1.494l-.547 2.19a.68.68 0 0 0 .178.643l2.457 2.457a.68.68 0 0 0 .643.178l2.19-.547a1.75 1.75 0 0 1 1.494.315l2.306 1.794c.829.645.905 1.87.163 2.611l-1.034 1.034c-.74.74-1.846 1.065-2.877.702a18.6 18.6 0 0 1-7.01-4.42 18.6 18.6 0 0 1-4.42-7.009c-.362-1.03-.037-2.137.703-2.877z"/></svg>
+                    </a>
+                    <a href="https://wa.me/966565101406" target="_blank" rel="noopener noreferrer" class="support-link whatsapp" title="محادثة واتساب">
+                        <svg viewBox="0 0 16 16" fill="currentColor"><path d="M13.601 2.326A7.85 7.85 0 0 0 7.994 0C3.627 0 .068 3.558.064 7.926c0 1.399.366 2.76 1.057 3.965L0 16l4.204-1.102a7.9 7.9 0 0 0 3.79.949h.004c4.368 0 7.926-3.564 7.93-7.93a7.9 7.9 0 0 0-2.327-5.594ZM7.994 14.52a6.57 6.57 0 0 1-3.356-.92l-.24-.144-2.494.654.666-2.433-.156-.251a6.56 6.56 0 0 1-1.007-3.505c0-3.626 2.957-6.584 6.591-6.584a6.56 6.56 0 0 1 4.66 1.931 6.56 6.56 0 0 1 1.928 4.66c-.004 3.639-2.961 6.592-6.592 6.592m3.69-3.186c-.2-.1-.1.184-.265-.1-.082-.18-.475-.953-.517-1.038-.04-.08-.08-.12-.138-.2-.058-.08-.122-.1-.2-.184-.079-.084-1.248-.99-1.248-2.124 0-1.137.59-1.694.858-1.97.268-.276.587-.348.788-.348s.4.012.57.018c.17.006.398-.064.622.482.224.547.766 1.87.83 2.003.065.13.1.28.016.446-.084.167-.124.269-.25.41-.125.14-.263.314-.375.422-.124.122-.253.255-.107.507.147.25.65 1.077 1.394 1.74.96.855 1.77 1.118 2.022 1.244.253.125.4.1.547-.07.148-.17.632-.734.802-.986.17-.253.339-.21.57-.126s1.468.69 1.72.82c.253.13.422.195.482.3.06.105.06.608-.14 1.23-.2.62-1.09 1.21-1.5 1.25-.41.04-2.46.73-10.74-2.52"/></svg>
+                    </a>
+                </div>
+            </div>
+            <div class="support-item">
+                <span class="support-label">دعم فني (2)</span>
+                <span class="support-number">056 744 8881</span>
+                <div class="support-links">
+                    <a href="tel:0567448881" class="support-link call" title="اتصال هاتفي">
+                        <svg viewBox="0 0 16 16" fill="currentColor"><path fill-rule="evenodd" d="M1.885.511a1.745 1.745 0 0 1 2.61.163L6.29 2.98c.329.423.445.974.315 1.494l-.547 2.19a.68.68 0 0 0 .178.643l2.457 2.457a.68.68 0 0 0 .643.178l2.19-.547a1.75 1.75 0 0 1 1.494.315l2.306 1.794c.829.645.905 1.87.163 2.611l-1.034 1.034c-.74.74-1.846 1.065-2.877.702a18.6 18.6 0 0 1-7.01-4.42 18.6 18.6 0 0 1-4.42-7.009c-.362-1.03-.037-2.137.703-2.877z"/></svg>
+                    </a>
+                    <a href="https://wa.me/966567448881" target="_blank" rel="noopener noreferrer" class="support-link whatsapp" title="محادثة واتساب">
+                        <svg viewBox="0 0 16 16" fill="currentColor"><path d="M13.601 2.326A7.85 7.85 0 0 0 7.994 0C3.627 0 .068 3.558.064 7.926c0 1.399.366 2.76 1.057 3.965L0 16l4.204-1.102a7.9 7.9 0 0 0 3.79.949h.004c4.368 0 7.926-3.564 7.93-7.93a7.9 7.9 0 0 0-2.327-5.594ZM7.994 14.52a6.57 6.57 0 0 1-3.356-.92l-.24-.144-2.494.654.666-2.433-.156-.251a6.56 6.56 0 0 1-1.007-3.505c0-3.626 2.957-6.584 6.591-6.584a6.56 6.56 0 0 1 4.66 1.931 6.56 6.56 0 0 1 1.928 4.66c-.004 3.639-2.961 6.592-6.592 6.592m3.69-3.186c-.2-.1-.1.184-.265-.1-.082-.18-.475-.953-.517-1.038-.04-.08-.08-.12-.138-.2-.058-.08-.122-.1-.2-.184-.079-.084-1.248-.99-1.248-2.124 0-1.137.59-1.694.858-1.97.268-.276.587-.348.788-.348s.4.012.57.018c.17.006.398-.064.622.482.224.547.766 1.87.83 2.003.065.13.1.28.016.446-.084.167-.124.269-.25.41-.125.14-.263.314-.375.422-.124.122-.253.255-.107.507.147.25.65 1.077 1.394 1.74.96.855 1.77 1.118 2.022 1.244.253.125.4.1.547-.07.148-.17.632-.734.802-.986.17-.253.339-.21.57-.126s1.468.69 1.72.82c.253.13.422.195.482.3.06.105.06.608-.14 1.23-.2.62-1.09 1.21-1.5 1.25-.41.04-2.46.73-10.74-2.52"/></svg>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <div class="footer">
+        <p>
+            <a class="link-text" href="https://haderedu.com/privacy-policy-extension" target="_blank" rel="noopener noreferrer">سياسة الخصوصية للإضافة</a>
+            •
+            <a class="link-text" href="https://haderedu.com/contact" target="_blank" rel="noopener noreferrer">التواصل مع الدعم</a>
+        </p>
+    </div>
+
+</div>
+
+<!-- ════════════════════════════════════
+     SCREEN 2: DASHBOARD
+════════════════════════════════════ -->
+<div id="screen-dashboard" style="display:none;">
+
+    <!-- Header -->
+    <div class="ext-header">
+        <div class="ext-header-logo">
+            <img src="logo/logo-48.png" width="48" height="48" alt="حضر">
+        </div>
+        <div class="ext-header-text">
+            <h1>حضر</h1>
+            <p>حسابك وأدوات منصة مدرستي</p>
+        </div>
+    </div>
+
+    <!-- User info -->
+    <div class="user-info-card">
+        <div class="user-info-icon">
+            <img src="logo/logo-48.png" width="48" height="48" alt="حضر">
+        </div>
+        <div class="user-info-text">
+            <div class="user-info-name" id="userNameDisplay">—</div>
+            <div class="user-info-email" id="userEmailDisplay">—</div>
+        </div>
+        <span class="user-badge">مسجل الدخول</span>
+    </div>
+
+    <div class="account-note">
+        <strong>الحساب متصل.</strong>
+        <!-- Trial / Subscription status rendered by popup.js -->
+        <div id="trialStatusCard" class="trial-card active" style="margin-top:8px;">
+            <div class="trial-title" id="trialTitle">جاري تحميل بيانات الاشتراك...</div>
+            <div class="trial-sub" id="trialSub"></div>
+            <a id="trialUpgradeBtn" href="https://haderedu.com/checkout" target="_blank" rel="noopener noreferrer"
+               class="trial-upgrade-btn" style="display:none;">اشترك الآن ←</a>
+        </div>
+        <div id="quotaDisplay" style="margin-top: 4px; font-weight: 500; font-size:11px; color:#718096;"></div>
+    </div>
+
+    <!-- Logout -->
+    <button id="logoutBtn" class="btn-logout" type="button" style="width:100%;">
+        🚪 تسجيل الخروج
+    </button>
+
+    <hr class="divider">
+
+    <!-- Support Contacts -->
+    <div class="support-panel">
+        <div class="support-title">
+            <span>📞</span>
+            <span>الدعم الفني وتواصل الخدمة</span>
+        </div>
+        <div class="support-contacts">
+            <div class="support-item">
+                <span class="support-label">دعم فني (1)</span>
+                <span class="support-number">056 510 1406</span>
+                <div class="support-links">
+                    <a href="tel:0565101406" class="support-link call" title="اتصال هاتفي">
+                        <svg viewBox="0 0 16 16" fill="currentColor"><path fill-rule="evenodd" d="M1.885.511a1.745 1.745 0 0 1 2.61.163L6.29 2.98c.329.423.445.974.315 1.494l-.547 2.19a.68.68 0 0 0 .178.643l2.457 2.457a.68.68 0 0 0 .643.178l2.19-.547a1.75 1.75 0 0 1 1.494.315l2.306 1.794c.829.645.905 1.87.163 2.611l-1.034 1.034c-.74.74-1.846 1.065-2.877.702a18.6 18.6 0 0 1-7.01-4.42 18.6 18.6 0 0 1-4.42-7.009c-.362-1.03-.037-2.137.703-2.877z"/></svg>
+                    </a>
+                    <a href="https://wa.me/966565101406" target="_blank" rel="noopener noreferrer" class="support-link whatsapp" title="محادثة واتساب">
+                        <svg viewBox="0 0 16 16" fill="currentColor"><path d="M13.601 2.326A7.85 7.85 0 0 0 7.994 0C3.627 0 .068 3.558.064 7.926c0 1.399.366 2.76 1.057 3.965L0 16l4.204-1.102a7.9 7.9 0 0 0 3.79.949h.004c4.368 0 7.926-3.564 7.93-7.93a7.9 7.9 0 0 0-2.327-5.594ZM7.994 14.52a6.57 6.57 0 0 1-3.356-.92l-.24-.144-2.494.654.666-2.433-.156-.251a6.56 6.56 0 0 1-1.007-3.505c0-3.626 2.957-6.584 6.591-6.584a6.56 6.56 0 0 1 4.66 1.931 6.56 6.56 0 0 1 1.928 4.66c-.004 3.639-2.961 6.592-6.592 6.592m3.69-3.186c-.2-.1-.1.184-.265-.1-.082-.18-.475-.953-.517-1.038-.04-.08-.08-.12-.138-.2-.058-.08-.122-.1-.2-.184-.079-.084-1.248-.99-1.248-2.124 0-1.137.59-1.694.858-1.97.268-.276.587-.348.788-.348s.4.012.57.018c.17.006.398-.064.622.482.224.547.766 1.87.83 2.003.065.13.1.28.016.446-.084.167-.124.269-.25.41-.125.14-.263.314-.375.422-.124.122-.253.255-.107.507.147.25.65 1.077 1.394 1.74.96.855 1.77 1.118 2.022 1.244.253.125.4.1.547-.07.148-.17.632-.734.802-.986.17-.253.339-.21.57-.126s1.468.69 1.72.82c.253.13.422.195.482.3.06.105.06.608-.14 1.23-.2.62-1.09 1.21-1.5 1.25-.41.04-2.46.73-10.74-2.52"/></svg>
+                    </a>
+                </div>
+            </div>
+            <div class="support-item">
+                <span class="support-label">دعم فني (2)</span>
+                <span class="support-number">056 744 8881</span>
+                <div class="support-links">
+                    <a href="tel:0567448881" class="support-link call" title="اتصال هاتفي">
+                        <svg viewBox="0 0 16 16" fill="currentColor"><path fill-rule="evenodd" d="M1.885.511a1.745 1.745 0 0 1 2.61.163L6.29 2.98c.329.423.445.974.315 1.494l-.547 2.19a.68.68 0 0 0 .178.643l2.457 2.457a.68.68 0 0 0 .643.178l2.19-.547a1.75 1.75 0 0 1 1.494.315l2.306 1.794c.829.645.905 1.87.163 2.611l-1.034 1.034c-.74.74-1.846 1.065-2.877.702a18.6 18.6 0 0 1-7.01-4.42 18.6 18.6 0 0 1-4.42-7.009c-.362-1.03-.037-2.137.703-2.877z"/></svg>
+                    </a>
+                    <a href="https://wa.me/966567448881" target="_blank" rel="noopener noreferrer" class="support-link whatsapp" title="محادثة واتساب">
+                        <svg viewBox="0 0 16 16" fill="currentColor"><path d="M13.601 2.326A7.85 7.85 0 0 0 7.994 0C3.627 0 .068 3.558.064 7.926c0 1.399.366 2.76 1.057 3.965L0 16l4.204-1.102a7.9 7.9 0 0 0 3.79.949h.004c4.368 0 7.926-3.564 7.93-7.93a7.9 7.9 0 0 0-2.327-5.594ZM7.994 14.52a6.57 6.57 0 0 1-3.356-.92l-.24-.144-2.494.654.666-2.433-.156-.251a6.56 6.56 0 0 1-1.007-3.505c0-3.626 2.957-6.584 6.591-6.584a6.56 6.56 0 0 1 4.66 1.931 6.56 6.56 0 0 1 1.928 4.66c-.004 3.639-2.961 6.592-6.592 6.592m3.69-3.186c-.2-.1-.1.184-.265-.1-.082-.18-.475-.953-.517-1.038-.04-.08-.08-.12-.138-.2-.058-.08-.122-.1-.2-.184-.079-.084-1.248-.99-1.248-2.124 0-1.137.59-1.694.858-1.97.268-.276.587-.348.788-.348s.4.012.57.018c.17.006.398-.064.622.482.224.547.766 1.87.83 2.003.065.13.1.28.016.446-.084.167-.124.269-.25.41-.125.14-.263.314-.375.422-.124.122-.253.255-.107.507.147.25.65 1.077 1.394 1.74.96.855 1.77 1.118 2.022 1.244.253.125.4.1.547-.07.148-.17.632-.734.802-.986.17-.253.339-.21.57-.126s1.468.69 1.72.82c.253.13.422.195.482.3.06.105.06.608-.14 1.23-.2.62-1.09 1.21-1.5 1.25-.41.04-2.46.73-10.74-2.52"/></svg>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <div class="footer">
+        <p>الإصدار 10.0.7 | <a class="link-text" href="https://haderedu.com/privacy-policy-extension" target="_blank" rel="noopener noreferrer">سياسة الخصوصية</a> | <a class="link-text" href="https://haderedu.com/contact" target="_blank" rel="noopener noreferrer">الدعم الفني</a></p>
+        <p>يعمل على منصة مدرستي فقط</p>
+    </div>
+
+</div>
+
+<script src="shared/constants.js"></script>
+<script src="popup.js"></script>
+</body>
+</html>
