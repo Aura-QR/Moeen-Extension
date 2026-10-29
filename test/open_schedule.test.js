@@ -17,24 +17,27 @@ function check(label, condition) {
 function build(landingUrl) {
   const tabs = [];
   const created = [];
+  const createdActive = [];
+  const updated = [];
   const chrome = {
     tabs: {
       query: async () => tabs.slice(),
-      create: async ({ url }) => {
+      create: async ({ url, active }) => {
         created.push(url);
-        const tab = { id: 42, url: landingUrl, status: 'complete', active: true };
+        createdActive.push(active);
+        const tab = { id: 42, url: landingUrl, status: 'complete', active };
         tabs.push(tab);
         return tab;
       },
       get: async (id) => tabs.find((t) => t.id === id) || null,
-      update: async () => null,
+      update: async (id, props) => { updated.push(props); return null; },
     },
   };
   const from = SOURCE.indexOf(START);
   const to = SOURCE.indexOf(END);
   if (from < 0 || to < from) throw new Error('could not slice the tab helpers out of background.js');
   const factory = new Function('chrome', `${SOURCE.slice(from, to)}; return { openMadrasatiSchedule, findMadrasatiTab };`);
-  return { ...factory(chrome), created };
+  return { ...factory(chrome), created, createdActive, updated };
 }
 
 (async () => {
@@ -49,6 +52,19 @@ function build(landingUrl) {
     const found = await openMadrasatiSchedule();
     check('a sign-in page gives no tab', found.tab === null);
     check('and asks the teacher to sign in', /سجّل الدخول/.test(found.error));
+  }
+  {
+    // «تحديث كل الأسابيع»: opened behind the Hader page.
+    const { openMadrasatiSchedule, createdActive, updated } = build('https://schools.madrasati.sa/SchoolSchedule/Schedule/TeacherSchedule?SchoolId=abc');
+    const found = await openMadrasatiSchedule({ active: false, retry: 'اضغط «تحديث كل الأسابيع»' });
+    check('the weeks sync opens Madrasati in the background', createdActive[0] === false && found.tab && found.opened);
+    check('and leaves the teacher on the Hader page', updated.length === 0);
+  }
+  {
+    const { openMadrasatiSchedule, updated } = build('https://schools.madrasati.sa/Account/Login?ReturnUrl=%2FSchoolSchedule');
+    const found = await openMadrasatiSchedule({ active: false, retry: 'اضغط «تحديث كل الأسابيع»' });
+    check('a sign-in page is brought to the front', updated[0] && updated[0].active === true);
+    check('and the message names the right button', /تحديث كل الأسابيع/.test(found.error));
   }
   console.log(failures ? `\n${failures} failed` : '\nAll passed');
   process.exit(failures ? 1 : 0);

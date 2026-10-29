@@ -163,20 +163,23 @@ const MADRASATI_SCHEDULE_URL = 'https://schools.madrasati.sa/SchoolSchedule';
  * only when Madrasati really shows the schedule; a sign-in page (or anything
  * else) comes back as an error to show the teacher.
  */
-async function openMadrasatiSchedule() {
+// `active: false` opens it behind the Hader page (reading the weeks), so the
+// teacher stays where they are; `retry` names what to ask for again.
+async function openMadrasatiSchedule({ active = true, retry = 'أعد طلب التحضير' } = {}) {
   let tab;
   try {
-    tab = await chrome.tabs.create({ url: MADRASATI_SCHEDULE_URL, active: true });
+    tab = await chrome.tabs.create({ url: MADRASATI_SCHEDULE_URL, active });
   } catch (error) {
-    return { tab: null, opened: false, error: 'تعذر فتح مدرستي. افتح جدول المعلم في مدرستي ثم أعد طلب التحضير.' };
+    return { tab: null, opened: false, error: 'تعذر فتح مدرستي. افتح جدول المعلم في مدرستي ثم ' + retry + '.' };
   }
   await waitForTabComplete(tab.id, 45000);
   const found = await findMadrasatiTab(false);
   if (found.tab && found.tab.id === tab.id) return { tab: found.tab, opened: true };
+  if (!active) await chrome.tabs.update(tab.id, { active: true }).catch(() => {});
   return {
     tab: null,
     opened: true,
-    error: 'فتحنا لك مدرستي في تبويب جديد. سجّل الدخول وافتح جدول المعلم، ثم أعد طلب التحضير.'
+    error: 'فتحنا لك مدرستي في تبويب جديد. سجّل الدخول وافتح جدول المعلم، ثم ' + retry + '.'
   };
 }
 
@@ -686,22 +689,30 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     // message has to stay open for the whole multi-minute walk.
     (async () => {
       try {
-        const found = await findMadrasatiTab(false);
+        // No schedule tab: open it behind the Hader page instead of asking the teacher to.
+        let found = await findMadrasatiTab(false);
+        if (!found.tab) found = await openMadrasatiSchedule({ active: false, retry: 'اضغط «تحديث كل الأسابيع»' });
         if (!found.tab) {
           sendResponse({
             success: false,
             code: 'madrasati_tab_required',
-            error: 'افتح مدرستي وسجّل الدخول ثم افتح جدول المعلم واضغط تحديث.'
+            error: found.error || 'افتح مدرستي وسجّل الدخول ثم افتح جدول المعلم واضغط تحديث.'
           });
           return;
         }
-        const accepted = await sendToTab(found.tab.id, {
+        const request = {
           action: 'HADER_HARVEST_ALL_WEEKS',
           harvestId: msg.harvestId,
           maxWeeks: msg.maxWeeks,
           weeksBefore: msg.weeksBefore,
           weeksAfter: msg.weeksAfter
-        });
+        };
+        // A schedule just opened draws its grid after the page loads.
+        let accepted = await sendToTab(found.tab.id, request);
+        for (let tries = 0; found.opened && accepted?.code === 'schedule_not_open' && tries < 10; tries++) {
+          await new Promise((resolve) => setTimeout(resolve, 2000));
+          accepted = await sendToTab(found.tab.id, request);
+        }
         sendResponse(accepted || { success: false, error: 'لم تستجب صفحة مدرستي. أعد تحميلها ثم حاول مرة أخرى.' });
       } catch (error) {
         sendResponse({ success: false, error: error?.message || String(error) });
