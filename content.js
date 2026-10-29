@@ -1162,6 +1162,9 @@
     var dashboardInjected = false;
     var dashboardLessonCount = 0;
     var dashboardScanRunning = false;
+    // A result (error, warning, success) stays until the teacher acts again:
+    // the 1.5s scan used to replace it with its hint at once.
+    var dashboardStatusSticky = false;
     var dashboardPollTimer = null;
     var scheduleRouteWatcher = null;
     var presenceBadgeState = "active";
@@ -1334,6 +1337,7 @@
       });
       select.addEventListener("change", function (event) {
         event.stopPropagation();
+        dashboardStatusSticky = false;
         if (select.value) {
           select.style.borderColor = "#1a9448";
           select.style.background = "rgba(26,148,72,0.04)";
@@ -1850,9 +1854,11 @@
       renderStudentReportModal(data);
     };
 
-    function updateDashboardStatus(message, tone) {
+    function updateDashboardStatus(message, tone, isHint) {
       var status = document.getElementById("Moeen-2-dashboard-status");
       if (!status) return;
+      if (isHint && dashboardStatusSticky) return;
+      dashboardStatusSticky = !isHint && (tone === "error" || tone === "warning" || tone === "success");
       status.textContent = message;
       var toneColors = {
         info: "#6b7c93",
@@ -1941,7 +1947,7 @@
         var cards = findScheduleCards();
         dashboardLessonCount = cards.length;
         if (!cards.length) {
-          updateDashboardStatus("تم تشغيل حضر، لكن لم يتم العثور على بطاقات الحصص بعد. سيتم الفحص تلقائياً.", "warning");
+          updateDashboardStatus("تم تشغيل حضر، لكن لم يتم العثور على بطاقات الحصص بعد. سيتم الفحص تلقائياً.", "warning", true);
           updateDashboardCounter();
           return;
         }
@@ -1968,11 +1974,11 @@
         if (haderRemotePreparationRunning) return;
         var total = document.querySelectorAll('.Moeen-2-dashboard-select').length;
         if (total) {
-          updateDashboardStatus("اختر درساً لكل حصة ثم اضغط «حضر» — " + total + " حصة متاحة", "info");
+          updateDashboardStatus("اختر درساً لكل حصة ثم اضغط «حضر» — " + total + " حصة متاحة", "info", true);
         } else if (missingSubject === cards.length) {
-          updateDashboardStatus("ظهرت لوحة حضر، لكن بنية بطاقات الجدول الجديدة لا تعرض معرّف المادة بعد.", "warning");
+          updateDashboardStatus("ظهرت لوحة حضر، لكن بنية بطاقات الجدول الجديدة لا تعرض معرّف المادة بعد.", "warning", true);
         } else if (!added) {
-          updateDashboardStatus("تم العثور على الحصص، لكن تعذّر تحميل قائمة الدروس.", "warning");
+          updateDashboardStatus("تم العثور على الحصص، لكن تعذّر تحميل قائمة الدروس.", "warning", true);
         }
       } finally {
         dashboardScanRunning = false;
