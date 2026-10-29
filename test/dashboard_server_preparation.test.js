@@ -61,7 +61,7 @@ function build(server) {
         })),
       };
     },
-    readMadrasatiPeriod: () => ({ week_date: '2026-10-04' }),
+    readMadrasatiPeriod: () => ({ week_date: server.weekDate || '2026-10-04' }),
     readMadrasatiUser: () => ({ madrasati_user_id: 'F10A5C95735D01C3AC1FAAFB6F66AA30', madrasati_user_name: 'معلم' }),
     getResourceEnabled: (key) => key === 'activity' || key === 'homework',
     isHaderPreparationBusy: () => false,
@@ -165,6 +165,28 @@ const allowed = { authorize: () => ({ ok: true }) };
     const { prepare } = build(Object.assign({ failTokens: ['T1'] }, allowed));
     const outcome = await prepare(cards(3));
     check('it is counted as failed, the rest as done', outcome, { done: 2, failed: 1, stopped: '' });
+  }
+
+  console.log('\n— a lesson more than 7 days ahead —');
+  {
+    const { prepare, calls } = build(Object.assign({ weekDate: '2030-03-03' }, allowed));
+    const far = cards(2);
+    far.forEach((card, day) => { card.div.closest = (selector) => (selector === '[data-day]' ? { getAttribute: () => String(day) } : null); });
+    const outcome = await prepare(far);
+    check('nothing is sent to the server or written to Madrasati', [calls.authorize, calls.executed], [[], []]);
+    check('both are counted as not prepared', [outcome.done, outcome.failed], [0, 2]);
+    check('the teacher is told the day it opens', /7 أيام فقط.*تُفتح للتحضير يوم .*فبراير/.test(outcome.stopped), true);
+    check('the card is marked', far[0].select.style.borderColor, '#c0392b');
+  }
+
+  console.log('\n— the lesson\'s day goes to the server —');
+  {
+    let sent = null;
+    const { prepare } = build({ authorize: (_, lessons) => { sent = lessons[0]; return { ok: true }; } });
+    const one = cards(1);
+    one[0].div.closest = (selector) => (selector === '[data-day]' ? { getAttribute: () => '3' } : null);
+    await prepare(one);
+    check('day_of_week is sent', sent.day_of_week, 3);
   }
 
   console.log(failures ? `\n${failures} failed` : '\nAll passed');
