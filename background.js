@@ -204,10 +204,18 @@ async function sendToTab(tabId, message) {
     if (!/Receiving end does not exist|Could not establish connection/i.test(String(error?.message || error))) {
       throw error;
     }
-    await chrome.scripting.executeScript({
-      target: { tabId, frameIds: [0] },
-      files: ['shared/constants.js', 'content.js']
-    });
+    try {
+      await chrome.scripting.executeScript({
+        target: { tabId, frameIds: [0] },
+        files: ['shared/constants.js', 'content.js']
+      });
+    } catch (injectError) {
+      // Chrome's own error page: Madrasati did not load (down, slow, or offline).
+      if (/showing error page/i.test(String(injectError?.message || injectError))) {
+        throw new Error('لم تفتح صفحة مدرستي (الموقع لا يستجيب الآن). حدّث تبويب مدرستي أو حاول بعد قليل.');
+      }
+      throw injectError;
+    }
     await new Promise((resolve) => setTimeout(resolve, 300));
     return chrome.tabs.sendMessage(tabId, message, { frameId: 0 });
   }
@@ -688,16 +696,19 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     // HADER_WEEK_HARVESTED / HADER_ALL_WEEKS_DONE broadcasts so no single
     // message has to stay open for the whole multi-minute walk.
     (async () => {
+      let found = await findMadrasatiTab(false).catch(() => ({ tab: null }));
+      // No schedule tab: say yes at once (the site waits only seconds for
+      // this answer), open the schedule behind the Hader page, and report any
+      // failure the way the walk reports its end.
+      const opening = !found.tab;
+      if (opening) sendResponse({ success: true, accepted: true, opening: true });
+      const fail = (error) => opening
+        ? broadcastToHaderTabs('HADER_ALL_WEEKS_DONE', { success: false, harvest_id: msg.harvestId, error })
+        : sendResponse({ success: false, code: 'madrasati_tab_required', error });
       try {
-        // No schedule tab: open it behind the Hader page instead of asking the teacher to.
-        let found = await findMadrasatiTab(false);
-        if (!found.tab) found = await openMadrasatiSchedule({ active: false, retry: 'اضغط «تحديث كل الأسابيع»' });
+        if (opening) found = await openMadrasatiSchedule({ active: false, retry: 'اضغط «تحديث كل الأسابيع»' });
         if (!found.tab) {
-          sendResponse({
-            success: false,
-            code: 'madrasati_tab_required',
-            error: found.error || 'افتح مدرستي وسجّل الدخول ثم افتح جدول المعلم واضغط تحديث.'
-          });
+          await fail(found.error || 'افتح مدرستي وسجّل الدخول ثم افتح جدول المعلم واضغط تحديث.');
           return;
         }
         const request = {
@@ -713,9 +724,13 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           await new Promise((resolve) => setTimeout(resolve, 2000));
           accepted = await sendToTab(found.tab.id, request);
         }
-        sendResponse(accepted || { success: false, error: 'لم تستجب صفحة مدرستي. أعد تحميلها ثم حاول مرة أخرى.' });
+        if (!opening) {
+          sendResponse(accepted || { success: false, error: 'لم تستجب صفحة مدرستي. أعد تحميلها ثم حاول مرة أخرى.' });
+        } else if (!accepted?.success) {
+          await fail(accepted?.error || 'لم تستجب صفحة مدرستي. أعد تحميلها ثم حاول مرة أخرى.');
+        }
       } catch (error) {
-        sendResponse({ success: false, error: error?.message || String(error) });
+        await fail(error?.message || String(error));
       }
     })();
     return true;
